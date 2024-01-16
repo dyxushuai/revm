@@ -42,7 +42,7 @@ jobs:
 
       - name: Run Ethereum tests
         run: |
-          cross run --target ${{matrix.target}} --profile ${{ matrix.profile }} -p revme -- statetest \
+          cross run --target ${{ matrix.target }} --profile ${{ matrix.profile }} -p revme -- statetest \
             ethtests/GeneralStateTests/ \
             ethtests/LegacyTests/Constantinople/GeneralStateTests/ \
             ethtests/EIPTests/StateTests/stEIP1153-transientStorage/ \
