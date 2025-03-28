@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [21.0.1](https://github.com/dyxushuai/revm/compare/revm-v21.0.0...revm-v21.0.1) - 2025-03-28
+
+### Other
+
+- updated the following local packages: revm-precompile, revm-handler, revm-inspector
+
 ## [21.0.0](https://github.com/bluealloy/revm/compare/revm-v20.0.0...revm-v21.0.0) - 2025-03-28
 
 ### Added
