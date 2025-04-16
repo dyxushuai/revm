@@ -35,8 +35,8 @@ And [`Context`](https://docs.rs/revm-context/latest/revm_context/context/struct.
 
 REVM provides four ways to execute transactions through traits (API):
 
-* `transact(tx)` and `replay()` are function of [`ExecuteEvm`](https://docs.rs/revm-handler/latest/revm_handler/evm/trait.ExecuteEvm.html) trait that allow execution transactions. They return the status of execution with reason, changed state and in case of failed execution an error.
-* `transact_commit(tx)` and `replay_commit()` are part of [`ExecuteCommitEvm`](https://docs.rs/revm-handler/latest/revm_handler/evm/trait.ExecuteCommitEvm.html) that internally commits the state diff to the database and returns status of execution. Database is required to support `DatabaseCommit` trait.
+* `transact(tx)` and `replay()` are function of [`ExecuteEvm`](https://docs.rs/revm-handler/latest/revm_handler/api/trait.ExecuteEvm.html) trait that allow execution transactions. They return the status of execution with reason, changed state and in case of failed execution an error.
+* `transact_commit(tx)` and `replay_commit()` are part of [`ExecuteCommitEvm`](https://docs.rs/revm-handler/latest/revm_handler/api/trait.ExecuteCommitEvm.html) that internally commits the state diff to the database and returns status of execution. Database is required to support `DatabaseCommit` trait.
 * `inspect()`, `inspect_replay(tx)` and a few others are part of [`InspectEvm`](https://docs.rs/revm-inspector/latest/revm_inspector/trait.InspectEvm.html) trait that allow execution with inspection. This is how tracers are called.
 * `inspect_commit()`,`inspect_replay_commit(tx)` are part of the [`InspectCommitEvm`](https://docs.rs/revm-inspector/latest/revm_inspector/trait.InspectCommitEvm.html) trait that extends `InspectEvm` to allow committing state diff after tracing.
 
@@ -51,7 +51,7 @@ let _ = evm.inspect_with_tx(tx);
 
 To learn how to build your own custom EVM:
 - Check out the [example-my-evm](https://github.com/bluealloy/revm/tree/main/examples/my_evm) guide
-- Look at [op-revm](https://github.com/bluealloy/revm/tree/main/crates/optimism) to see how Optimism uses REVM
+- Look at [op-revm](https://github.com/bluealloy/revm/tree/main/crates/op-revm) to see how Optimism uses REVM
 
 Each trait needed to build custom EVM has detailed documentation explaining how it works and is worth reading.
 

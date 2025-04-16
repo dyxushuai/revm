@@ -40,7 +40,7 @@ As previously noted, there are several groups of projects that utilize this tech
 * **Major block builders**.
 * **Clients**: [Reth](https://github.com/paradigmxyz/reth), [Helios](https://github.com/a16z/helios), [Trin](https://github.com/ethereum/trin),..
 * **Tooling**: [Foundry](https://github.com/foundry-rs/foundry/), [Hardhat](https://github.com/NomicFoundation/hardhat),..
-* **L2s**: [Optimism](https://github.com/bluealloy/revm/tree/main/crates/optimism), [Coinbase](https://www.base.org/), [Scroll](https://github.com/scroll-tech/revm),..
+* **L2s**: [Optimism](https://github.com/bluealloy/revm/tree/main/crates/op-revm), [Coinbase](https://www.base.org/), [Scroll](https://github.com/scroll-tech/revm),..
 * **zkVM**: [Risc0](https://github.com/risc0/risc0-ethereum), [Succinct](https://github.com/succinctlabs/rsp),..
 
 The full list of projects that use Revm is available in the awesome-revm section of the book.
@@ -57,7 +57,7 @@ Some quicklinks can be found here. Some pointto code documentation or book. code
 * How to use Revm Framework can be foud in MyEvm example. [book](https://github.com/bluealloy/revm/tree/main/examples/my_evm)
 * Release procedure and changelogs explanation. [book](https://bluealloy.github.io/revm/release_procedure.html)
 * How to use revme (Revm binary with few commands) can be found here. [code](https://github.com/bluealloy/revm/tree/main/bins/revme)
-* How to run Ethereum test can be found here: [book](https://bluealloy.github.io/revm/dev.html#running-eth-tests)
+* How to run Ethereum test can be found here: [book](https://bluealloy.github.io/revm/revme.html#running-eth-tests)
 * If there is more explanations please open PR request for it.
 
 ### Community:
