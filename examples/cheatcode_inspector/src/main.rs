@@ -6,11 +6,10 @@
 //! advanced cheatcode use-case.
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
-use std::{convert::Infallible, fmt::Debug};
-
 use revm::{
     context::{
-        result::InvalidTransaction, BlockEnv, Cfg, CfgEnv, ContextTr, Evm, JournalOutput, TxEnv,
+        result::InvalidTransaction, BlockEnv, Cfg, CfgEnv, ContextTr, Evm, JournalOutput,
+        LocalContext, TxEnv,
     },
     context_interface::{
         journaled_state::{AccountLoad, JournalCheckpoint, TransferError},
@@ -27,10 +26,11 @@ use revm::{
         interpreter::EthInterpreter, CallInputs, CallOutcome, InterpreterResult, SStoreResult,
         SelfDestructResult, StateLoad,
     },
-    primitives::{hardfork::SpecId, Address, HashSet, Log, B256, U256},
+    primitives::{hardfork::SpecId, Address, HashSet, Log, StorageKey, StorageValue, B256, U256},
     state::{Account, Bytecode, EvmState},
     Context, Database, DatabaseCommit, InspectEvm, Inspector, Journal, JournalEntry,
 };
+use std::{convert::Infallible, fmt::Debug};
 
 /// Backend for cheatcodes.
 /// The problematic cheatcodes are only supported in fork mode, so we'll omit the non-fork behavior of the Foundry
@@ -75,25 +75,25 @@ impl JournalTr for Backend {
     fn sload(
         &mut self,
         address: Address,
-        key: U256,
-    ) -> Result<StateLoad<U256>, <Self::Database as Database>::Error> {
+        key: StorageKey,
+    ) -> Result<StateLoad<StorageValue>, <Self::Database as Database>::Error> {
         self.journaled_state.sload(address, key)
     }
 
     fn sstore(
         &mut self,
         address: Address,
-        key: U256,
-        value: U256,
+        key: StorageKey,
+        value: StorageValue,
     ) -> Result<StateLoad<SStoreResult>, <Self::Database as Database>::Error> {
         self.journaled_state.sstore(address, key, value)
     }
 
-    fn tload(&mut self, address: Address, key: U256) -> U256 {
+    fn tload(&mut self, address: Address, key: StorageKey) -> StorageValue {
         self.journaled_state.tload(address, key)
     }
 
-    fn tstore(&mut self, address: Address, key: U256, value: U256) {
+    fn tstore(&mut self, address: Address, key: StorageKey, value: StorageValue) {
         self.journaled_state.tstore(address, key, value)
     }
 
@@ -112,7 +112,7 @@ impl JournalTr for Backend {
     fn warm_account_and_storage(
         &mut self,
         address: Address,
-        storage_keys: impl IntoIterator<Item = U256>,
+        storage_keys: impl IntoIterator<Item = StorageKey>,
     ) -> Result<(), <Self::Database as Database>::Error> {
         self.journaled_state
             .warm_account_and_storage(address, storage_keys)
@@ -232,8 +232,8 @@ impl JournalExt for Backend {
         self.journaled_state.logs()
     }
 
-    fn last_journal(&self) -> &[JournalEntry] {
-        self.journaled_state.last_journal()
+    fn journal(&self) -> &[JournalEntry] {
+        self.journaled_state.journal()
     }
 
     fn evm_state(&self) -> &EvmState {
@@ -504,6 +504,7 @@ where
         cfg: env.cfg,
         journaled_state: new_backend,
         chain: (),
+        local: LocalContext::default(),
         error: Ok(()),
     };
 
@@ -555,6 +556,7 @@ fn main() -> anyhow::Result<()> {
         cfg: env.cfg,
         journaled_state: backend,
         chain: (),
+        local: LocalContext::default(),
         error: Ok(()),
     };
 
@@ -567,7 +569,7 @@ fn main() -> anyhow::Result<()> {
     evm.inspect_replay()?;
 
     // Sanity check
-    assert_eq!(evm.data.inspector.call_count, 2);
+    assert_eq!(evm.inspector.call_count, 2);
     assert_eq!(evm.journaled_state.method_with_inspector_counter, 1);
     assert_eq!(evm.journaled_state.method_without_inspector_counter, 1);
 
