@@ -1,5 +1,5 @@
 use crate::{Inspector, InspectorEvmTr, InspectorFrame, JournalExt};
-use context::{result::ResultAndState, ContextTr, JournalEntry, Transaction};
+use context::{result::ExecutionResult, ContextTr, JournalEntry, Transaction};
 use handler::{EvmTr, Frame, FrameInitOrResult, FrameOrResult, FrameResult, Handler, ItemOrResult};
 use interpreter::{
     instructions::InstructionTable,
@@ -40,7 +40,7 @@ where
     fn inspect_run(
         &mut self,
         evm: &mut Self::Evm,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::HaltReason>, Self::Error> {
         match self.inspect_run_without_catch_error(evm) {
             Ok(output) => Ok(output),
             Err(e) => self.catch_error(evm, e),
@@ -53,11 +53,12 @@ where
     fn inspect_run_without_catch_error(
         &mut self,
         evm: &mut Self::Evm,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::HaltReason>, Self::Error> {
         let init_and_floor_gas = self.validate(evm)?;
         let eip7702_refund = self.pre_execution(evm)? as i64;
-        let exec_result = self.inspect_execution(evm, &init_and_floor_gas);
-        self.post_execution(evm, exec_result?, init_and_floor_gas, eip7702_refund)
+        let mut frame_result = self.inspect_execution(evm, &init_and_floor_gas)?;
+        self.post_execution(evm, &mut frame_result, init_and_floor_gas, eip7702_refund)?;
+        self.execution_result(evm, frame_result)
     }
 
     /// Run execution loop with inspection support
@@ -99,7 +100,8 @@ where
         mut frame_input: <Self::Frame as Frame>::FrameInit,
     ) -> Result<FrameOrResult<Self::Frame>, Self::Error> {
         let (ctx, inspector) = evm.ctx_inspector();
-        if let Some(output) = frame_start(ctx, inspector, &mut frame_input) {
+        if let Some(mut output) = frame_start(ctx, inspector, &mut frame_input) {
+            frame_end(ctx, inspector, &frame_input, &mut output);
             return Ok(ItemOrResult::Result(output));
         }
         let mut ret = self.first_frame_init(evm, frame_input.clone());
@@ -152,7 +154,8 @@ where
             let result = match call_or_result {
                 ItemOrResult::Item(mut init) => {
                     let (context, inspector) = evm.ctx_inspector();
-                    if let Some(output) = frame_start(context, inspector, &mut init) {
+                    if let Some(mut output) = frame_start(context, inspector, &mut init) {
+                        frame_end(context, inspector, &init, &mut output);
                         output
                     } else {
                         match self.frame_init(frame, evm, init.clone())? {
@@ -299,7 +302,7 @@ where
     // handle selfdestruct
     if let InterpreterAction::Return { result } = &next_action {
         if result.result == InstructionResult::SelfDestruct {
-            match context.journal().last_journal().last() {
+            match context.journal().journal().last() {
                 Some(JournalEntry::AccountDestroyed {
                     address,
                     target,

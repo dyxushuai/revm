@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1](https://github.com/bluealloy/revm/compare/revm-bytecode-v4.0.0...revm-bytecode-v4.0.1) - 2025-05-22
+
+### Other
+
+- make crates.io version badge clickable ([#2526](https://github.com/bluealloy/revm/pull/2526))
+
+## [4.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v3.0.0...revm-bytecode-v4.0.0) - 2025-05-07
+
+### Added
+
+- *(EOF)* Changes needed for devnet-1 ([#2377](https://github.com/bluealloy/revm/pull/2377))
+- *(bytecode)* improve legacy bytecode padding ([#2423](https://github.com/bluealloy/revm/pull/2423))
+
+### Other
+
+- typos ([#2474](https://github.com/bluealloy/revm/pull/2474))
+- copy edit The Book ([#2463](https://github.com/bluealloy/revm/pull/2463))
+- simplify opcode iter ([#2458](https://github.com/bluealloy/revm/pull/2458))
+- make OPCODE_INFO a static ([#2459](https://github.com/bluealloy/revm/pull/2459))
+- simplify reading signed integers ([#2456](https://github.com/bluealloy/revm/pull/2456))
+- cache and use JumpTable::default ([#2439](https://github.com/bluealloy/revm/pull/2439))
+- bump dependency version ([#2431](https://github.com/bluealloy/revm/pull/2431))
+- fixed broken link ([#2421](https://github.com/bluealloy/revm/pull/2421))
+- *(lints)* revm-context lints ([#2404](https://github.com/bluealloy/revm/pull/2404))
+
+## [3.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v2.0.0...revm-bytecode-v3.0.0) - 2025-04-09
+
+### Added
+
+- Iteration of bytecode opcodes ([#2349](https://github.com/bluealloy/revm/pull/2349))
+
+### Other
+
+- add 0x prefix to b256! and address! calls ([#2345](https://github.com/bluealloy/revm/pull/2345))
+
 ## [2.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v1.0.0...revm-bytecode-v2.0.0) - 2025-03-28
 
 ### Fixed

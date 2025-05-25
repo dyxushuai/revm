@@ -3,7 +3,7 @@ use crate::{
     inspect::{InspectCommitEvm, InspectEvm},
     Inspector, InspectorEvmTr, InspectorFrame, InspectorHandler, JournalExt,
 };
-use context::{ContextSetters, ContextTr, Evm, JournalOutput, JournalTr};
+use context::{ContextSetters, ContextTr, Evm, JournalTr};
 use database_interface::DatabaseCommit;
 use handler::{
     instructions::InstructionProvider, EthFrame, EvmTr, EvmTrError, Frame, FrameResult, Handler,
@@ -13,12 +13,13 @@ use interpreter::{
     interpreter::EthInterpreter, FrameInput, Interpreter, InterpreterAction, InterpreterResult,
     InterpreterTypes,
 };
+use state::EvmState;
 
 // Implementing InspectorHandler for MainnetHandler.
 impl<EVM, ERROR, FRAME> InspectorHandler for MainnetHandler<EVM, ERROR, FRAME>
 where
     EVM: InspectorEvmTr<
-        Context: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>>,
+        Context: ContextTr<Journal: JournalTr<State = EvmState>>,
         Inspector: Inspector<<<Self as Handler>::Evm as EvmTr>::Context, EthInterpreter>,
     >,
     ERROR: EvmTrError<EVM>,
@@ -31,7 +32,7 @@ where
 // Implementing InspectEvm for Evm
 impl<CTX, INSP, INST, PRECOMPILES> InspectEvm for Evm<CTX, INSP, INST, PRECOMPILES>
 where
-    CTX: ContextSetters + ContextTr<Journal: JournalTr<FinalOutput = JournalOutput> + JournalExt>,
+    CTX: ContextSetters + ContextTr<Journal: JournalTr<State = EvmState> + JournalExt>,
     INSP: Inspector<CTX, EthInterpreter>,
     INST: InstructionProvider<Context = CTX, InterpreterTypes = EthInterpreter>,
     PRECOMPILES: PrecompileProvider<CTX, Output = InterpreterResult>,
@@ -39,14 +40,14 @@ where
     type Inspector = INSP;
 
     fn set_inspector(&mut self, inspector: Self::Inspector) {
-        self.data.inspector = inspector;
+        self.inspector = inspector;
     }
 
-    fn inspect_replay(&mut self) -> Self::Output {
+    fn inspect_tx(&mut self, tx: Self::Tx) -> Result<Self::ExecutionResult, Self::Error> {
+        self.set_tx(tx);
         let mut t = MainnetHandler::<_, _, EthFrame<_, _, _>> {
             _phantom: core::marker::PhantomData,
         };
-
         t.inspect_run(self)
     }
 }
@@ -55,17 +56,11 @@ where
 impl<CTX, INSP, INST, PRECOMPILES> InspectCommitEvm for Evm<CTX, INSP, INST, PRECOMPILES>
 where
     CTX: ContextSetters
-        + ContextTr<Journal: JournalTr<FinalOutput = JournalOutput> + JournalExt, Db: DatabaseCommit>,
+        + ContextTr<Journal: JournalTr<State = EvmState> + JournalExt, Db: DatabaseCommit>,
     INSP: Inspector<CTX, EthInterpreter>,
     INST: InstructionProvider<Context = CTX, InterpreterTypes = EthInterpreter>,
     PRECOMPILES: PrecompileProvider<CTX, Output = InterpreterResult>,
 {
-    fn inspect_replay_commit(&mut self) -> Self::CommitOutput {
-        self.inspect_replay().map(|r| {
-            self.ctx().db().commit(r.state);
-            r.result
-        })
-    }
 }
 
 // Implementing InspectorEvmTr for Evm
@@ -82,11 +77,11 @@ where
     type Inspector = INSP;
 
     fn inspector(&mut self) -> &mut Self::Inspector {
-        &mut self.data.inspector
+        &mut self.inspector
     }
 
     fn ctx_inspector(&mut self) -> (&mut Self::Context, &mut Self::Inspector) {
-        (&mut self.data.ctx, &mut self.data.inspector)
+        (&mut self.ctx, &mut self.inspector)
     }
 
     fn run_inspect_interpreter(
@@ -96,9 +91,9 @@ where
         >,
     ) -> <<Self::Instructions as InstructionProvider>::InterpreterTypes as InterpreterTypes>::Output
     {
-        let context = &mut self.data.ctx;
+        let context = &mut self.ctx;
         let instructions = &mut self.instruction;
-        let inspector = &mut self.data.inspector;
+        let inspector = &mut self.inspector;
 
         inspect_instructions(
             context,

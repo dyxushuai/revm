@@ -1,5 +1,112 @@
 Because this is workspace with multi libraries, tags will be simplified, and with this document you can match version of project with git tag.
 
+# v74 tag
+date 23.05.2025
+
+Osaka devnet-0 support
+
+* `revm-primitives`: 19.0.0 -> 19.1.0 (✓ API compatible changes)
+* `revm-bytecode`: 4.0.0 -> 4.0.1 (✓ API compatible changes)
+* `revm-state`: 4.0.0 -> 4.0.1 (✓ API compatible changes)
+* `revm-database-interface`: 4.0.0 -> 4.0.1 (✓ API compatible changes)
+* `revm-context-interface`: 4.1.0 -> 5.0.0 (⚠ API breaking changes)
+* `revm-context`: 4.1.0 -> 5.0.0 (⚠ API breaking changes)
+* `revm-database`: 4.0.0 -> 4.0.1 (✓ API compatible changes)
+* `revm-interpreter`: 19.1.0 -> 20.0.0 (✓ API compatible changes)
+* `revm-precompile`: 20.1.0 -> 21.0.0 (⚠ API breaking changes)
+* `revm-handler`: 4.1.0 -> 5.0.0 (✓ API compatible changes)
+* `revm-inspector`: 4.1.0 -> 5.0.0 (✓ API compatible changes)
+* `revm`: 23.1.0 -> 24.0.0 (✓ API compatible changes)
+* `revm-statetest-types`: 4.1.0 -> 5.0.0 (✓ API compatible changes)
+* `revme`: 5.0.0 -> 5.1.0 (✓ API compatible changes)
+* `op-revm`: 4.0.2 -> 5.0.0 (✓ API compatible changes)
+
+# v71 tag
+date: 09.05.2025
+
+op-revm fix: deposit nonce bump
+
+* `op-revm`: 4.0.1 -> 4.0.2 (✓ API compatible changes)
+
+
+# v71 tag
+date: 09.05.2025
+
+op-revm fix.
+
+* `op-revm`: 4.0.0 -> 4.0.1 (✓ API compatible changes)
+
+# v71 tag
+date: 07.05.2025
+
+Maintanance release that fixes last v70 version bump.
+
+
+* `revm-state`: 3.0.1 -> 4.0.0 
+* `revm-database-interface`: 3.0.1 -> 4.0.0 
+* `revm-database`: 3.1.0 -> 4.0.0
+* `revm-context-interface`: 4.0.0 -> 4.1.0
+* `revm-context`: 4.0.0 -> 4.1.0
+* `revm-interpreter`: 19.0.0 -> 19.1.0
+* `revm-precompile`: 20.0.0 -> 20.1.0
+* `revm-handler`: 4.0.0 -> 4.1.0
+* `revm-inspector`: 4.0.0 -> 4.1.0
+* `revm`: 23.0.0 -> 23.1.0
+* `revm-statetest-types`: 4.0.0 -> 4.1.0
+* `revme`: 4.1.0 -> 5.0.0 
+* `op-revm`: 3.0.2 -> 3.1.0 
+
+# v70 tag
+date: 07.05.2025
+
+Yanked release as dependency bump was done incorrectly. Maintanance release.
+
+* `revm-primitives`: 18.0.0 -> 19.0.0 (⚠️ API breaking changes)
+* `revm-bytecode`: 3.0.0 -> 4.0.0 (⚠️ API breaking changes)
+* `revm-state`: 3.0.0 -> 3.0.1 (✓ API compatible changes)
+* `revm-database-interface`: 3.0.0 -> 3.0.1 (✓ API compatible changes)
+* `revm-context-interface`: 3.0.0 -> 4.0.0 (⚠️ API breaking changes)
+* `revm-context`: 3.0.1 -> 4.0.0 (⚠️ API breaking changes)
+* `revm-database`: 3.0.0 -> 3.1.0 (✓ API compatible changes)
+* `revm-interpreter`: 18.0.0 -> 19.0.0 (⚠️ API breaking changes)
+* `revm-precompile`: 19.0.0 -> 20.0.0 (⚠️ API breaking changes)
+* `revm-handler`: 3.0.1 -> 4.0.0 (⚠️ API breaking changes)
+* `revm-inspector`: 3.0.1 -> 4.0.0 (⚠️ API breaking changes)
+* `revm`: 22.0.1 -> 23.0.0 (✓ API compatible changes)
+* `revm-statetest-types`: 3.0.1 -> 4.0.0 (⚠️ API breaking changes)
+* `revme`: 4.0.2 -> 4.1.0 (✓ API compatible changes)
+* `op-revm`: 3.0.2 -> 3.1.0 (✓ API compatible changes)
+
+# v69 tag
+date: 14.04.2025
+
+op-revm bug fix for bls precompiles
+
+* `op-revm`: 3.0.0 -> 3.0.1 (✓ API compatible changes)
+
+# v68 tag
+date: 09.04.2025
+
+Bump to alloy-primitives, this warants major bump on all libs. No breaking changes
+
+* `revm-primitives`: 17.0.0 -> 18.0.0 (✓ API compatible changes)
+* `revm-bytecode`: 2.0.0 -> 3.0.0 (✓ API compatible changes)
+* `revm-state`: 2.0.0 -> 3.0.0 (✓ API compatible changes)
+* `revm-database-interface`: 2.0.0 -> 3.0.0 (✓ API compatible changes)
+* `revm-context-interface`: 2.0.0 -> 3.0.0 (✓ API compatible changes)
+* `revm-context`: 2.0.0 -> 3.0.0 (✓ API compatible changes)
+* `revm-database`: 2.0.0 -> 3.0.0 (✓ API compatible changes)
+* `revm-interpreter`: 17.0.0 -> 18.0.0 (✓ API compatible changes)
+* `revm-precompile`: 18.0.0 -> 19.0.0 (✓ API compatible changes)
+* `revm-handler`: 2.0.0 -> 3.0.0 (⚠️ API breaking changes)
+    * Two traits reexported in different mod
+* `revm-inspector`: 2.0.0 -> 3.0.0 (✓ API compatible changes)
+* `revm`: 21.0.0 -> 22.0.0 (✓ API compatible changes)
+* `revme`: 4.0.0 -> 4.0.1 (✓ API compatible changes)
+* `op-revm`: 2.0.0 -> 3.0.0 (✓ API compatible changes)
+* `revm-statetest-types`: 2.0.0 -> 3.0.0
+
+
 # v67 tag
 date: 28.03.2025
 

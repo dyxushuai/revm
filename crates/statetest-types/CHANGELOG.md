@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v4.1.0...revm-statetest-types-v5.0.0) - 2025-05-22
+
+### Other
+
+- add TxEnvBuilder::build_fill ([#2536](https://github.com/bluealloy/revm/pull/2536))
+- make crates.io version badge clickable ([#2526](https://github.com/bluealloy/revm/pull/2526))
+- Storage Types Alias ([#2461](https://github.com/bluealloy/revm/pull/2461))
+
+## [4.1.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v4.0.0...revm-statetest-types-v4.1.0) - 2025-05-07
+
+Dependency bump
+
+## [4.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v3.0.1...revm-statetest-types-v4.0.0) - 2025-05-07
+
+### Added
+
+- *(EOF)* Changes needed for devnet-1 ([#2377](https://github.com/bluealloy/revm/pull/2377))
+
+### Other
+
+- copy edit The Book ([#2463](https://github.com/bluealloy/revm/pull/2463))
+- bump dependency version ([#2431](https://github.com/bluealloy/revm/pull/2431))
+- fixed broken link ([#2421](https://github.com/bluealloy/revm/pull/2421))
+
+## [3.0.1](https://github.com/bluealloy/revm/compare/revm-statetest-types-v3.0.0..revm-statetest-types-v3.0.1) - 2025-04-15
+
+### Other
+
+## [3.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v2.0.0...revm-statetest-types-v3.0.0) - 2025-04-09
+
+### Other
+
+- updated the following local packages: revm
+
 ## [2.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v1.0.0...revm-statetest-types-v2.0.0) - 2025-03-28
 
 ### Other

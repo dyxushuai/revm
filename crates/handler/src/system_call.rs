@@ -2,10 +2,11 @@ use crate::{
     instructions::InstructionProvider, EthFrame, ExecuteCommitEvm, ExecuteEvm, Handler,
     MainnetHandler, PrecompileProvider,
 };
-use context::{ContextSetters, ContextTr, Evm, JournalOutput, JournalTr, TxEnv};
+use context::{result::ResultAndState, ContextSetters, ContextTr, Evm, JournalTr, TxEnv};
 use database_interface::DatabaseCommit;
 use interpreter::{interpreter::EthInterpreter, InterpreterResult};
 use primitives::{address, Address, Bytes, TxKind};
+use state::EvmState;
 
 pub const SYSTEM_ADDRESS: Address = address!("0xfffffffffffffffffffffffffffffffffffffffe");
 
@@ -45,9 +46,22 @@ pub trait SystemCallEvm: ExecuteEvm {
     /// Block values are taken into account and will determent how system call will be executed.
     fn transact_system_call(
         &mut self,
-        data: Bytes,
         system_contract_address: Address,
-    ) -> Self::Output;
+        data: Bytes,
+    ) -> Result<Self::ExecutionResult, Self::Error>;
+
+    /// Transact the system call and finalize.
+    ///
+    /// Internally calls combo of `transact_system_call` and `finalize` functions.
+    fn transact_system_call_finalize(
+        &mut self,
+        system_contract_address: Address,
+        data: Bytes,
+    ) -> Result<ResultAndState<Self::ExecutionResult, Self::State>, Self::Error> {
+        let result = self.transact_system_call(system_contract_address, data)?;
+        let state = self.finalize();
+        Ok(ResultAndState::new(result, state))
+    }
 }
 
 /// Extension of the [`SystemCallEvm`] trait that adds a method that commits the state after execution.
@@ -55,23 +69,22 @@ pub trait SystemCallCommitEvm: SystemCallEvm + ExecuteCommitEvm {
     /// Transact the system call and commit to the state.
     fn transact_system_call_commit(
         &mut self,
-        data: Bytes,
         system_contract_address: Address,
-    ) -> Self::CommitOutput;
+        data: Bytes,
+    ) -> Result<Self::ExecutionResult, Self::Error>;
 }
 
 impl<CTX, INSP, INST, PRECOMPILES> SystemCallEvm for Evm<CTX, INSP, INST, PRECOMPILES>
 where
-    CTX: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>, Tx: SystemCallTx>
-        + ContextSetters,
+    CTX: ContextTr<Journal: JournalTr<State = EvmState>, Tx: SystemCallTx> + ContextSetters,
     INST: InstructionProvider<Context = CTX, InterpreterTypes = EthInterpreter>,
     PRECOMPILES: PrecompileProvider<CTX, Output = InterpreterResult>,
 {
     fn transact_system_call(
         &mut self,
-        data: Bytes,
         system_contract_address: Address,
-    ) -> Self::Output {
+        data: Bytes,
+    ) -> Result<Self::ExecutionResult, Self::Error> {
         // set tx fields.
         self.set_tx(CTX::Tx::new_system_tx(data, system_contract_address));
         // create handler
@@ -82,23 +95,20 @@ where
 
 impl<CTX, INSP, INST, PRECOMPILES> SystemCallCommitEvm for Evm<CTX, INSP, INST, PRECOMPILES>
 where
-    CTX: ContextTr<
-            Journal: JournalTr<FinalOutput = JournalOutput>,
-            Db: DatabaseCommit,
-            Tx: SystemCallTx,
-        > + ContextSetters,
+    CTX: ContextTr<Journal: JournalTr<State = EvmState>, Db: DatabaseCommit, Tx: SystemCallTx>
+        + ContextSetters,
     INST: InstructionProvider<Context = CTX, InterpreterTypes = EthInterpreter>,
     PRECOMPILES: PrecompileProvider<CTX, Output = InterpreterResult>,
 {
     fn transact_system_call_commit(
         &mut self,
-        data: Bytes,
         system_contract_address: Address,
-    ) -> Self::CommitOutput {
-        self.transact_system_call(data, system_contract_address)
-            .map(|r| {
-                self.db().commit(r.state);
-                r.result
+        data: Bytes,
+    ) -> Result<Self::ExecutionResult, Self::Error> {
+        self.transact_system_call_finalize(system_contract_address, data)
+            .map(|output| {
+                self.db().commit(output.state);
+                output.result
             })
     }
 }
@@ -113,7 +123,7 @@ mod tests {
         Context,
     };
     use database::InMemoryDB;
-    use primitives::{b256, bytes, U256};
+    use primitives::{b256, bytes, StorageKey, U256};
     use state::{AccountInfo, Bytecode};
 
     const HISTORY_STORAGE_ADDRESS: Address = address!("0x0000F90827F1C53a10cb7A02335B175320002935");
@@ -135,14 +145,12 @@ mod tests {
             // block with number 1 will set storage at slot 0.
             .modify_block_chained(|b| b.number = 1)
             .build_mainnet();
-        let res = my_evm
-            .transact_system_call(block_hash.0.into(), HISTORY_STORAGE_ADDRESS)
+        let output = my_evm
+            .transact_system_call_finalize(HISTORY_STORAGE_ADDRESS, block_hash.0.into())
             .unwrap();
 
-        let result = res.result;
-        let state = res.state;
         assert_eq!(
-            result,
+            output.result,
             ExecutionResult::Success {
                 reason: SuccessReason::Stop,
                 gas_used: 22143,
@@ -152,15 +160,16 @@ mod tests {
             }
         );
         // only system contract is updated and present
-        assert_eq!(state.len(), 1);
+        assert_eq!(output.state.len(), 1);
         assert_eq!(
-            state[&HISTORY_STORAGE_ADDRESS]
+            output.state[&HISTORY_STORAGE_ADDRESS]
                 .storage
-                .get(&U256::from(0))
+                .get(&StorageKey::from(0))
                 .map(|slot| slot.present_value)
                 .unwrap_or_default(),
             U256::from_be_bytes(block_hash.0),
-            "State is not updated {state:?}"
+            "State is not updated {:?}",
+            output.state
         );
     }
 }

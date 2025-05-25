@@ -6,6 +6,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [20.0.0](https://github.com/bluealloy/revm/compare/revm-interpreter-v19.1.0...revm-interpreter-v20.0.0) - 2025-05-22
+
+### Added
+
+- expose Gas::memory field ([#2512](https://github.com/bluealloy/revm/pull/2512))
+- added CallInput::bytes<CTX>(ctx: &CTX) -> Bytes {} function ([#2507](https://github.com/bluealloy/revm/pull/2507))
+
+### Other
+
+- make crates.io version badge clickable ([#2526](https://github.com/bluealloy/revm/pull/2526))
+- fix clippy ([#2523](https://github.com/bluealloy/revm/pull/2523))
+- Storage Types Alias ([#2461](https://github.com/bluealloy/revm/pull/2461))
+
+## [19.1.0](https://github.com/bluealloy/revm/compare/revm-interpreter-v19.0.0...revm-interpreter-v19.1.0) - 2025-05-07
+
+Dependency bump
+
+## [19.0.0](https://github.com/bluealloy/revm/compare/revm-interpreter-v18.0.0...revm-interpreter-v19.0.0) - 2025-05-07
+
+### Added
+
+- *(Osaka)* disable EOF ([#2480](https://github.com/bluealloy/revm/pull/2480))
+- skip cloning of call input from shared memory ([#2462](https://github.com/bluealloy/revm/pull/2462))
+- Add a custom address to the CreateScheme. ([#2464](https://github.com/bluealloy/revm/pull/2464))
+- replace input Bytes and refactored code where required ([#2453](https://github.com/bluealloy/revm/pull/2453))
+- *(EOF)* Changes needed for devnet-1 ([#2377](https://github.com/bluealloy/revm/pull/2377))
+- Move SharedMemory buffer to context ([#2382](https://github.com/bluealloy/revm/pull/2382))
+
+### Fixed
+
+- *(inspector)* fix call return with Some ([#2469](https://github.com/bluealloy/revm/pull/2469))
+- skip account list for legacy ([#2400](https://github.com/bluealloy/revm/pull/2400))
+
+### Other
+
+- Add Bytecode address to Interpreter ([#2479](https://github.com/bluealloy/revm/pull/2479))
+- make ReturnDataImpl and LoopControlImpl public ([#2470](https://github.com/bluealloy/revm/pull/2470))
+- copy edit The Book ([#2463](https://github.com/bluealloy/revm/pull/2463))
+- Replace InterpreterAction with InterpreterTypes::Output ([#2424](https://github.com/bluealloy/revm/pull/2424))
+- simplify reading signed integers ([#2456](https://github.com/bluealloy/revm/pull/2456))
+- *(revm-interpreter)* remove unused deps ([#2447](https://github.com/bluealloy/revm/pull/2447))
+- bump dependency version ([#2431](https://github.com/bluealloy/revm/pull/2431))
+- fixed broken link ([#2421](https://github.com/bluealloy/revm/pull/2421))
+
+## [18.0.0](https://github.com/bluealloy/revm/compare/revm-interpreter-v17.0.0...revm-interpreter-v18.0.0) - 2025-04-09
+
+### Added
+
+- *(tests)* Add dupn, swapn and exhange tests ([#2343](https://github.com/bluealloy/revm/pull/2343))
+- support for system calls ([#2350](https://github.com/bluealloy/revm/pull/2350))
+
+### Other
+
+- *(test)* uncommented bitwise.rs and system.rs tests ([#2370](https://github.com/bluealloy/revm/pull/2370))
+- *(tests)* fix program counter for eof jump instructions ([#2368](https://github.com/bluealloy/revm/pull/2368))
+- fix tests in data.rs file ([#2365](https://github.com/bluealloy/revm/pull/2365))
+- remove redundant U256 conversions in instructions ([#2364](https://github.com/bluealloy/revm/pull/2364))
+- add 0x prefix to b256! and address! calls ([#2345](https://github.com/bluealloy/revm/pull/2345))
+
 ## [17.0.0](https://github.com/bluealloy/revm/compare/revm-interpreter-v16.0.0...revm-interpreter-v17.0.0) - 2025-03-28
 
 ### Other

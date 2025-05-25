@@ -2,32 +2,29 @@ use crate::transaction::TransactionError;
 use core::fmt::{self, Debug};
 use database_interface::DBErrorMarker;
 use primitives::{Address, Bytes, Log, U256};
-use state::EvmState;
 use std::{boxed::Box, string::String, vec::Vec};
 
 pub trait HaltReasonTr: Clone + Debug + PartialEq + Eq + From<HaltReason> {}
 
 impl<T> HaltReasonTr for T where T: Clone + Debug + PartialEq + Eq + From<HaltReason> {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Tuple containing evm execution result and state.s
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ResultAndState<HaltReasonTy = HaltReason> {
-    /// Status of execution
-    pub result: ExecutionResult<HaltReasonTy>,
-    /// State that got updated
-    pub state: EvmState,
+pub struct ResultAndState<R, S> {
+    /// Execution result
+    pub result: R,
+    /// Output State.
+    pub state: S,
 }
 
-impl<HaltReasonTy> ResultAndState<HaltReasonTy> {
-    /// Maps a `DBError` to a new error type using the provided closure, leaving other variants unchanged.
-    pub fn map_haltreason<F, OHR>(self, op: F) -> ResultAndState<OHR>
-    where
-        F: FnOnce(HaltReasonTy) -> OHR,
-    {
-        ResultAndState {
-            result: self.result.map_haltreason(op),
-            state: self.state,
-        }
+/// Tuple containing multiple execution results and state.
+pub type ResultVecAndState<R, S> = ResultAndState<Vec<R>, S>;
+
+impl<R, S> ResultAndState<R, S> {
+    /// Creates new ResultAndState.
+    pub fn new(result: R, state: S) -> Self {
+        Self { result, state }
     }
 }
 
@@ -370,6 +367,26 @@ pub enum InvalidTransaction {
     Eip4844NotSupported,
     /// EIP-7702 is not supported.
     Eip7702NotSupported,
+    /// EIP-7873 is not supported.
+    Eip7873NotSupported,
+    // TODO (EOF)
+    // /// EIP-7873 needs to have at least one initcode.
+    // Eip7873EmptyInitcodeList,
+    // /// EIP-7873 initcode can't be zero length.
+    // Eip7873EmptyInitcode {
+    //     i: usize,
+    // },
+    // /// EIP-7873 initcodes can't be more than [`MAX_INITCODE_COUNT`].
+    // Eip7873TooManyInitcodes {
+    //     size: usize,
+    // },
+    // /// EIP-7873 initcodes can't be more than [`MAX_INITCODE_SIZE`].
+    // Eip7873InitcodeTooLarge {
+    //     i: usize,
+    //     size: usize,
+    // },
+    /// EIP-7873 initcode transaction should have `to` address.
+    Eip7873MissingTarget,
 }
 
 impl TransactionError for InvalidTransaction {}
@@ -454,6 +471,29 @@ impl fmt::Display for InvalidTransaction {
             Self::Eip1559NotSupported => write!(f, "Eip1559 is not supported"),
             Self::Eip4844NotSupported => write!(f, "Eip4844 is not supported"),
             Self::Eip7702NotSupported => write!(f, "Eip7702 is not supported"),
+            Self::Eip7873NotSupported => write!(f, "Eip7873 is not supported"),
+            // TODO(EOF)
+            // Self::Eip7873EmptyInitcodeList => {
+            //     write!(f, "Eip7873 initcode list should have at least one initcode")
+            // }
+            // Self::Eip7873EmptyInitcode { i } => {
+            //     write!(f, "Eip7873 initcode {i} can't be zero length")
+            // }
+            // Self::Eip7873TooManyInitcodes { size } => {
+            //     write!(
+            //         f,
+            //         "Eip7873 initcodes can't be more than {MAX_INITCODE_COUNT}, have {size}"
+            //     )
+            // }
+            // Self::Eip7873InitcodeTooLarge { i, size } => {
+            //     write!(
+            //         f,
+            //         "Eip7873 initcode {i} can't be more than {MAX_INITCODE_SIZE}, have {size}"
+            //     )
+            // }
+            Self::Eip7873MissingTarget => {
+                write!(f, "Eip7873 initcode transaction should have `to` address")
+            }
         }
     }
 }

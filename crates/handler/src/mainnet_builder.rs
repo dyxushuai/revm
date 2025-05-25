@@ -1,5 +1,5 @@
 use crate::{instructions::EthInstructions, EthPrecompiles};
-use context::{BlockEnv, Cfg, CfgEnv, Context, Evm, EvmData, Journal, TxEnv};
+use context::{BlockEnv, Cfg, CfgEnv, Context, Evm, Journal, TxEnv};
 use context_interface::{Block, Database, JournalTr, Transaction};
 use database_interface::EmptyDB;
 use interpreter::interpreter::EthInterpreter;
@@ -31,10 +31,8 @@ where
 
     fn build_mainnet(self) -> MainnetEvm<Self::Context> {
         Evm {
-            data: EvmData {
-                ctx: self,
-                inspector: (),
-            },
+            ctx: self,
+            inspector: (),
             instruction: EthInstructions::default(),
             precompiles: EthPrecompiles::default(),
         }
@@ -45,10 +43,8 @@ where
         inspector: INSP,
     ) -> MainnetEvm<Self::Context, INSP> {
         Evm {
-            data: EvmData {
-                ctx: self,
-                inspector,
-            },
+            ctx: self,
+            inspector,
             instruction: EthInstructions::default(),
             precompiles: EthPrecompiles::default(),
         }
@@ -70,16 +66,17 @@ impl MainContext for Context<BlockEnv, TxEnv, CfgEnv, EmptyDB, Journal<EmptyDB>,
 mod test {
     use crate::ExecuteEvm;
     use crate::{MainBuilder, MainContext};
-    use alloy_signer::SignerSync;
+    use alloy_signer::{Either, SignerSync};
     use alloy_signer_local::PrivateKeySigner;
     use bytecode::{
         opcode::{PUSH1, SSTORE},
         Bytecode,
     };
-    use context::Context;
+    use context::{Context, TxEnv};
     use context_interface::{transaction::Authorization, TransactionType};
     use database::{BenchmarkDB, EEADDRESS, FFADDRESS};
     use primitives::{hardfork::SpecId, TxKind, U256};
+    use primitives::{StorageKey, StorageValue};
 
     #[test]
     fn sanity_eip7702_tx() {
@@ -96,25 +93,32 @@ mod test {
 
         let ctx = Context::mainnet()
             .modify_cfg_chained(|cfg| cfg.spec = SpecId::PRAGUE)
-            .with_db(BenchmarkDB::new_bytecode(bytecode))
-            .modify_tx_chained(|tx| {
-                tx.tx_type = TransactionType::Eip7702.into();
-                tx.gas_limit = 100_000;
-                tx.authorization_list = vec![auth];
-                tx.caller = EEADDRESS;
-                tx.kind = TxKind::Call(signer.address());
-            });
+            .with_db(BenchmarkDB::new_bytecode(bytecode));
 
         let mut evm = ctx.build_mainnet();
 
-        let ok = evm.replay().unwrap();
+        let state = evm
+            .transact_finalize(TxEnv {
+                tx_type: TransactionType::Eip7702.into(),
+                gas_limit: 100_000,
+                authorization_list: vec![Either::Left(auth)],
+                caller: EEADDRESS,
+                kind: TxKind::Call(signer.address()),
+                ..Default::default()
+            })
+            .unwrap()
+            .state;
 
-        let auth_acc = ok.state.get(&signer.address()).unwrap();
+        let auth_acc = state.get(&signer.address()).unwrap();
         assert_eq!(auth_acc.info.code, Some(Bytecode::new_eip7702(FFADDRESS)));
         assert_eq!(auth_acc.info.nonce, 1);
         assert_eq!(
-            auth_acc.storage.get(&U256::from(1)).unwrap().present_value,
-            U256::from(1)
+            auth_acc
+                .storage
+                .get(&StorageKey::from(1))
+                .unwrap()
+                .present_value,
+            StorageValue::from(1)
         );
     }
 }

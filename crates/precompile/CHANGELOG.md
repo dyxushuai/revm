@@ -6,6 +6,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [21.0.0](https://github.com/bluealloy/revm/compare/revm-precompile-v20.1.0...revm-precompile-v21.0.0) - 2025-05-22
+
+### Added
+
+- *(Osaka)* modexp input limit and gas change, EIP-7823 and EIP-7883 ([#2531](https://github.com/bluealloy/revm/pull/2531))
+
+### Other
+
+- make crates.io version badge clickable ([#2526](https://github.com/bluealloy/revm/pull/2526))
+- fixed dead link kzg_point_evaluation.rs ([#2508](https://github.com/bluealloy/revm/pull/2508))
+
+## [20.1.0](https://github.com/bluealloy/revm/compare/revm-precompile-v20.0.0...revm-precompile-v20.1.0) - 2025-05-07
+
+Dependency bump
+
+## [20.0.0](https://github.com/bluealloy/revm/compare/revm-precompile-v19.0.0...revm-precompile-v20.0.0) - 2025-05-07
+
+### Added
+
+- skip cloning of call input from shared memory ([#2462](https://github.com/bluealloy/revm/pull/2462))
+
+### Fixed
+
+- *(isthmus)* Add input size limitations to bls12-381 {G1/G2} MSM + pairing ([#2406](https://github.com/bluealloy/revm/pull/2406))
+
+### Other
+
+- typos ([#2474](https://github.com/bluealloy/revm/pull/2474))
+- copy edit The Book ([#2463](https://github.com/bluealloy/revm/pull/2463))
+- make OPCODE_INFO a static ([#2459](https://github.com/bluealloy/revm/pull/2459))
+- bump dependency version ([#2431](https://github.com/bluealloy/revm/pull/2431))
+- fixed broken link ([#2421](https://github.com/bluealloy/revm/pull/2421))
+- *(docs)* precompile crate ([#2413](https://github.com/bluealloy/revm/pull/2413))
+- bump stable tests, introduce lints ([#2403](https://github.com/bluealloy/revm/pull/2403))
+
+## [19.0.0](https://github.com/bluealloy/revm/compare/revm-precompile-v18.0.0...revm-precompile-v19.0.0) - 2025-04-09
+
+### Other
+
+- fixed `EIP` to `RIP` ([#2388](https://github.com/bluealloy/revm/pull/2388))
+- *(precompile)* remove unused dependencies ([#2378](https://github.com/bluealloy/revm/pull/2378))
+- add 0x prefix to b256! and address! calls ([#2345](https://github.com/bluealloy/revm/pull/2345))
+- alloy 0.13 and kzg v2.1.0 ([#2342](https://github.com/bluealloy/revm/pull/2342))
+
 ## [18.0.0](https://github.com/bluealloy/revm/compare/revm-precompile-v17.0.0...revm-precompile-v18.0.0) - 2025-03-28
 
 ### Added

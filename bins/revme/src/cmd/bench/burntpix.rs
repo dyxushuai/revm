@@ -1,6 +1,8 @@
 pub mod static_data;
 
+use context::TxEnv;
 use criterion::Criterion;
+use primitives::{StorageKey, StorageValue};
 use static_data::{
     BURNTPIX_ADDRESS_ONE, BURNTPIX_ADDRESS_THREE, BURNTPIX_ADDRESS_TWO, BURNTPIX_BYTECODE_FOUR,
     BURNTPIX_BYTECODE_ONE, BURNTPIX_BYTECODE_THREE, BURNTPIX_BYTECODE_TWO, BURNTPIX_MAIN_ADDRESS,
@@ -36,17 +38,20 @@ pub fn run(criterion: &mut Criterion) {
 
     let mut evm = Context::mainnet()
         .with_db(db)
-        .modify_tx_chained(|tx| {
-            tx.caller = BENCH_CALLER;
-            tx.kind = TxKind::Call(BURNTPIX_MAIN_ADDRESS);
-            tx.data = run_call_data.clone().into();
-            tx.gas_limit = u64::MAX;
-        })
+        .modify_cfg_chained(|c| c.disable_nonce_check = true)
         .build_mainnet();
+
+    let tx = TxEnv {
+        caller: BENCH_CALLER,
+        kind: TxKind::Call(BURNTPIX_MAIN_ADDRESS),
+        data: run_call_data.clone().into(),
+        gas_limit: u64::MAX,
+        ..Default::default()
+    };
 
     criterion.bench_function("burntpix", |b| {
         b.iter(|| {
-            evm.replay().unwrap();
+            evm.transact(tx.clone()).unwrap();
         })
     });
 
@@ -135,24 +140,24 @@ fn init_db() -> CacheDB<EmptyDB> {
     cache_db
         .insert_account_storage(
             BURNTPIX_MAIN_ADDRESS,
-            U256::from(0),
-            U256::from_be_bytes(*STORAGE_ZERO),
+            StorageKey::from(0),
+            StorageValue::from_be_bytes(*STORAGE_ZERO),
         )
         .unwrap();
 
     cache_db
         .insert_account_storage(
             BURNTPIX_MAIN_ADDRESS,
-            U256::from(1),
-            U256::from_be_bytes(*STORAGE_ONE),
+            StorageKey::from(1),
+            StorageValue::from_be_bytes(*STORAGE_ONE),
         )
         .unwrap();
 
     cache_db
         .insert_account_storage(
             BURNTPIX_MAIN_ADDRESS,
-            U256::from(2),
-            U256::from_be_bytes(*STORAGE_TWO),
+            StorageValue::from(2),
+            StorageKey::from_be_bytes(*STORAGE_TWO),
         )
         .unwrap();
 

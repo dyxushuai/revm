@@ -6,11 +6,9 @@
 //! advanced cheatcode use-case.
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
-use std::{convert::Infallible, fmt::Debug};
-
 use revm::{
     context::{
-        result::InvalidTransaction, BlockEnv, Cfg, CfgEnv, ContextTr, Evm, JournalOutput, TxEnv,
+        result::InvalidTransaction, BlockEnv, Cfg, CfgEnv, ContextTr, Evm, LocalContext, TxEnv,
     },
     context_interface::{
         journaled_state::{AccountLoad, JournalCheckpoint, TransferError},
@@ -27,10 +25,11 @@ use revm::{
         interpreter::EthInterpreter, CallInputs, CallOutcome, InterpreterResult, SStoreResult,
         SelfDestructResult, StateLoad,
     },
-    primitives::{hardfork::SpecId, Address, HashSet, Log, B256, U256},
+    primitives::{hardfork::SpecId, Address, HashSet, Log, StorageKey, StorageValue, B256, U256},
     state::{Account, Bytecode, EvmState},
     Context, Database, DatabaseCommit, InspectEvm, Inspector, Journal, JournalEntry,
 };
+use std::{convert::Infallible, fmt::Debug};
 
 /// Backend for cheatcodes.
 /// The problematic cheatcodes are only supported in fork mode, so we'll omit the non-fork behavior of the Foundry
@@ -58,7 +57,7 @@ impl Backend {
 
 impl JournalTr for Backend {
     type Database = InMemoryDB;
-    type FinalOutput = JournalOutput;
+    type State = EvmState;
 
     fn new(database: InMemoryDB) -> Self {
         Self::new(SpecId::default(), database)
@@ -75,25 +74,25 @@ impl JournalTr for Backend {
     fn sload(
         &mut self,
         address: Address,
-        key: U256,
-    ) -> Result<StateLoad<U256>, <Self::Database as Database>::Error> {
+        key: StorageKey,
+    ) -> Result<StateLoad<StorageValue>, <Self::Database as Database>::Error> {
         self.journaled_state.sload(address, key)
     }
 
     fn sstore(
         &mut self,
         address: Address,
-        key: U256,
-        value: U256,
+        key: StorageKey,
+        value: StorageValue,
     ) -> Result<StateLoad<SStoreResult>, <Self::Database as Database>::Error> {
         self.journaled_state.sstore(address, key, value)
     }
 
-    fn tload(&mut self, address: Address, key: U256) -> U256 {
+    fn tload(&mut self, address: Address, key: StorageKey) -> StorageValue {
         self.journaled_state.tload(address, key)
     }
 
-    fn tstore(&mut self, address: Address, key: U256, value: U256) {
+    fn tstore(&mut self, address: Address, key: StorageKey, value: StorageValue) {
         self.journaled_state.tstore(address, key, value)
     }
 
@@ -112,7 +111,7 @@ impl JournalTr for Backend {
     fn warm_account_and_storage(
         &mut self,
         address: Address,
-        storage_keys: impl IntoIterator<Item = U256>,
+        storage_keys: impl IntoIterator<Item = StorageKey>,
     ) -> Result<(), <Self::Database as Database>::Error> {
         self.journaled_state
             .warm_account_and_storage(address, storage_keys)
@@ -147,10 +146,6 @@ impl JournalTr for Backend {
         balance: U256,
     ) -> Result<Option<TransferError>, Infallible> {
         self.journaled_state.transfer(from, to, balance)
-    }
-
-    fn inc_account_nonce(&mut self, address: Address) -> Result<Option<u64>, Infallible> {
-        Ok(self.journaled_state.inc_nonce(address))
     }
 
     fn load_account(&mut self, address: Address) -> Result<StateLoad<&mut Account>, Infallible> {
@@ -222,8 +217,42 @@ impl JournalTr for Backend {
         self.journaled_state.depth()
     }
 
-    fn finalize(&mut self) -> Self::FinalOutput {
+    fn finalize(&mut self) -> Self::State {
         self.journaled_state.finalize()
+    }
+
+    fn caller_accounting_journal_entry(
+        &mut self,
+        address: Address,
+        old_balance: U256,
+        bump_nonce: bool,
+    ) {
+        self.journaled_state
+            .caller_accounting_journal_entry(address, old_balance, bump_nonce)
+    }
+
+    fn balance_incr(
+        &mut self,
+        address: Address,
+        balance: U256,
+    ) -> Result<(), <Self::Database as Database>::Error> {
+        self.journaled_state.balance_incr(address, balance)
+    }
+
+    fn nonce_bump_journal_entry(&mut self, address: Address) {
+        self.journaled_state.nonce_bump_journal_entry(address)
+    }
+
+    fn take_logs(&mut self) -> Vec<Log> {
+        self.journaled_state.take_logs()
+    }
+
+    fn commit_tx(&mut self) {
+        self.journaled_state.commit_tx()
+    }
+
+    fn discard_tx(&mut self) {
+        self.journaled_state.discard_tx()
     }
 }
 
@@ -232,8 +261,8 @@ impl JournalExt for Backend {
         self.journaled_state.logs()
     }
 
-    fn last_journal(&self) -> &[JournalEntry] {
-        self.journaled_state.last_journal()
+    fn journal(&self) -> &[JournalEntry] {
+        self.journaled_state.journal()
     }
 
     fn evm_state(&self) -> &EvmState {
@@ -265,7 +294,7 @@ trait DatabaseExt: JournalTr {
     where
         InspectorT: Inspector<Context<BlockT, TxT, CfgT, InMemoryDB, Backend>, EthInterpreter>,
         BlockT: Block,
-        TxT: Transaction,
+        TxT: Transaction + Clone,
         CfgT: Cfg,
         InstructionProviderT: InstructionProvider<
                 Context = Context<BlockT, TxT, CfgT, InMemoryDB, Backend>,
@@ -283,7 +312,7 @@ trait DatabaseExt: JournalTr {
     ) -> anyhow::Result<()>
     where
         BlockT: Block,
-        TxT: Transaction,
+        TxT: Transaction + Clone,
         CfgT: Cfg,
         InstructionProviderT: InstructionProvider<
                 Context = Context<BlockT, TxT, CfgT, InMemoryDB, Backend>,
@@ -311,7 +340,7 @@ impl DatabaseExt for Backend {
     where
         InspectorT: Inspector<Context<BlockT, TxT, CfgT, InMemoryDB, Backend>, EthInterpreter>,
         BlockT: Block,
-        TxT: Transaction,
+        TxT: Transaction + Clone,
         CfgT: Cfg,
         InstructionProviderT: InstructionProvider<
                 Context = Context<BlockT, TxT, CfgT, InMemoryDB, Backend>,
@@ -335,7 +364,7 @@ impl DatabaseExt for Backend {
     ) -> anyhow::Result<()>
     where
         BlockT: Block,
-        TxT: Transaction,
+        TxT: Transaction + Clone,
         CfgT: Cfg,
         InstructionProviderT: InstructionProvider<
                 Context = Context<BlockT, TxT, CfgT, InMemoryDB, Backend>,
@@ -481,7 +510,7 @@ fn commit_transaction<InspectorT, BlockT, TxT, CfgT, InstructionProviderT, Preco
 where
     InspectorT: Inspector<Context<BlockT, TxT, CfgT, InMemoryDB, Backend>, EthInterpreter>,
     BlockT: Block,
-    TxT: Transaction,
+    TxT: Transaction + Clone,
     CfgT: Cfg,
     InstructionProviderT: InstructionProvider<
             Context = Context<BlockT, TxT, CfgT, InMemoryDB, Backend>,
@@ -497,6 +526,7 @@ where
     // original backend.
     // Mimics https://github.com/foundry-rs/foundry/blob/25cc1ac68b5f6977f23d713c01ec455ad7f03d21/crates/evm/core/src/backend/mod.rs#L1950-L1953
     let new_backend = backend.clone();
+    let tx = env.tx.clone();
 
     let context = Context {
         tx: env.tx,
@@ -504,6 +534,7 @@ where
         cfg: env.cfg,
         journaled_state: new_backend,
         chain: (),
+        local: LocalContext::default(),
         error: Ok(()),
     };
 
@@ -513,10 +544,11 @@ where
         InstructionProviderT::default(),
         PrecompileT::default(),
     );
-    let result = evm.inspect_replay()?;
+
+    let state = evm.inspect_tx_finalize(tx)?.state;
 
     // Persist the changes to the original backend.
-    backend.journaled_state.database.commit(result.state);
+    backend.journaled_state.database.commit(state);
     update_state(
         &mut backend.journaled_state.inner.state,
         &mut backend.journaled_state.database,
@@ -548,6 +580,7 @@ fn main() -> anyhow::Result<()> {
         EthPrecompiles,
     >::default();
     let env = Env::mainnet();
+    let tx = env.tx.clone();
 
     let context = Context {
         tx: env.tx,
@@ -555,6 +588,7 @@ fn main() -> anyhow::Result<()> {
         cfg: env.cfg,
         journaled_state: backend,
         chain: (),
+        local: LocalContext::default(),
         error: Ok(()),
     };
 
@@ -564,10 +598,10 @@ fn main() -> anyhow::Result<()> {
         EthInstructions::default(),
         EthPrecompiles::default(),
     );
-    evm.inspect_replay()?;
+    evm.inspect_tx_finalize(tx)?;
 
     // Sanity check
-    assert_eq!(evm.data.inspector.call_count, 2);
+    assert_eq!(evm.inspector.call_count, 2);
     assert_eq!(evm.journaled_state.method_with_inspector_counter, 1);
     assert_eq!(evm.journaled_state.method_without_inspector_counter, 1);
 

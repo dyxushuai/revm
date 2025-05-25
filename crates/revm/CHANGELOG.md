@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [24.0.0](https://github.com/bluealloy/revm/compare/revm-v23.1.0...revm-v24.0.0) - 2025-05-22
+
+### Other
+
+- make crates.io version badge clickable ([#2526](https://github.com/bluealloy/revm/pull/2526))
+
+## [23.1.0](https://github.com/bluealloy/revm/compare/revm-v23.0.0...revm-v23.1.0) - 2025-05-07
+
+Dependency bump
+
+## [23.0.0](https://github.com/bluealloy/revm/compare/revm-v22.0.1...revm-v23.0.0) - 2025-05-07
+
+### Other
+
+- typos ([#2474](https://github.com/bluealloy/revm/pull/2474))
+- copy edit The Book ([#2463](https://github.com/bluealloy/revm/pull/2463))
+- bump dependency version ([#2431](https://github.com/bluealloy/revm/pull/2431))
+- fixed broken link ([#2421](https://github.com/bluealloy/revm/pull/2421))
+
+## [22.0.1](https://github.com/bluealloy/revm/compare/revm-v22.0.0..revm-v22.0.1) - 2025-04-15
+
+### Other
+
+## [22.0.0](https://github.com/bluealloy/revm/compare/revm-v21.0.0...revm-v22.0.0) - 2025-04-09
+
+### Added
+
+- support for system calls ([#2350](https://github.com/bluealloy/revm/pull/2350))
+- Reorder revm deps in Cargo.toml ([#2331](https://github.com/bluealloy/revm/pull/2331))
+
 ## [21.0.0](https://github.com/bluealloy/revm/compare/revm-v20.0.0...revm-v21.0.0) - 2025-03-28
 
 ### Added
@@ -1046,7 +1076,7 @@ Changes:
 # v1.0.0
 date: 18.12.2021
 
-It feel's like that the lib is in the state that is okay to promote it to the v1 version. Other that that, a lot of optimizations are done and the inspector trait was rewritten.
+It feel's like that the lib is in the state that is okay to promote it to the v1 version. Other than that, a lot of optimizations are done and the inspector trait was rewritten.
 
 Changes: 
 *  web3 db
