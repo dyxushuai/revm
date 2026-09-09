@@ -1,28 +1,59 @@
-use crate::{Gas, InstructionResult, InterpreterAction};
-use bytecode::eof::CodeInfo;
-use core::ops::{Deref, Range};
+use crate::{instructions::utility::IntoAddress, CallInput, InstructionResult, InterpreterAction};
+use core::{
+    cell::Ref,
+    ops::{Deref, Range},
+};
 use primitives::{hardfork::SpecId, Address, Bytes, B256, U256};
 
 /// Helper function to read immediates data from the bytecode
 pub trait Immediates {
-    fn read_i16(&self) -> i16;
+    /// Reads next 16 bits as signed integer from the bytecode.
+    #[inline]
+    fn read_i16(&self) -> i16 {
+        self.read_u16() as i16
+    }
+    /// Reads next 16 bits as unsigned integer from the bytecode.
     fn read_u16(&self) -> u16;
 
-    fn read_i8(&self) -> i8;
+    /// Reads next 8 bits as signed integer from the bytecode.
+    #[inline]
+    fn read_i8(&self) -> i8 {
+        self.read_u8() as i8
+    }
+
+    /// Reads next 8 bits as unsigned integer from the bytecode.
     fn read_u8(&self) -> u8;
 
-    fn read_offset_i16(&self, offset: isize) -> i16;
+    /// Reads next 16 bits as signed integer from the bytecode at given offset.
+    #[inline]
+    fn read_offset_i16(&self, offset: isize) -> i16 {
+        self.read_offset_u16(offset) as i16
+    }
+
+    /// Reads next 16 bits as unsigned integer from the bytecode at given offset.
     fn read_offset_u16(&self, offset: isize) -> u16;
 
+    /// Reads next `len` bytes from the bytecode.
+    ///
+    /// Used by PUSH opcode.
     fn read_slice(&self, len: usize) -> &[u8];
 }
 
 /// Trait for fetching inputs of the call.
 pub trait InputsTr {
+    /// Returns target address of the call.
     fn target_address(&self) -> Address;
+    /// Returns bytecode address of the call. For DELEGATECALL this address will be different from target address.
+    /// And if initcode is called this address will be [`None`].
+    fn bytecode_address(&self) -> Option<&Address>;
+    /// Returns caller address of the call.
     fn caller_address(&self) -> Address;
-    fn input(&self) -> &[u8];
+    /// Returns input of the call.
+    fn input(&self) -> &CallInput;
+    /// Returns call value of the call.
     fn call_value(&self) -> U256;
+    /// Returns the call depth of the frame this interpreter executes (0 for the first frame).
+    fn depth(&self) -> usize;
 }
 
 /// Trait needed for legacy bytecode.
@@ -58,6 +89,31 @@ pub trait MemoryTr {
     ///
     /// Panics if range is out of scope of allocated memory.
     fn set_data(&mut self, memory_offset: usize, data_offset: usize, len: usize, data: &[u8]);
+
+    /// Inner clone part of memory from global context to local context.
+    /// This is used to clone calldata to memory.
+    ///
+    /// # Panics
+    ///
+    /// Panics if range is out of scope of allocated memory.
+    fn set_data_from_global(
+        &mut self,
+        memory_offset: usize,
+        data_offset: usize,
+        len: usize,
+        data_range: Range<usize>,
+    );
+
+    /// Memory slice with global range. This range
+    ///
+    /// # Panics
+    ///
+    /// Panics if range is out of scope of allocated memory.
+    fn global_slice(&self, range: Range<usize>) -> Ref<'_, [u8]>;
+
+    /// Offset of local context of memory.
+    fn local_memory_offset(&self) -> usize;
+
     /// Sets memory data at given offset.
     ///
     /// # Panics
@@ -79,7 +135,7 @@ pub trait MemoryTr {
     /// # Panics
     ///
     /// Panics if range is out of scope of allocated memory.
-    fn slice(&self, range: Range<usize>) -> impl Deref<Target = [u8]> + '_;
+    fn slice(&self, range: Range<usize>) -> Ref<'_, [u8]>;
 
     /// Memory slice len
     ///
@@ -92,40 +148,13 @@ pub trait MemoryTr {
     ///
     /// # Note
     ///
-    /// It checks memory limits.
+    /// It checks if the memory allocation fits under gas cap.
     fn resize(&mut self, new_size: usize) -> bool;
-}
 
-/// Returns EOF containers. Used by [`bytecode::opcode::RETURNCONTRACT`] and [`bytecode::opcode::EOFCREATE`] opcodes.
-pub trait EofContainer {
-    /// Returns EOF container at given index.
-    fn eof_container(&self, index: usize) -> Option<&Bytes>;
-}
-
-/// Handles EOF introduced sub routine calls.
-pub trait SubRoutineStack {
-    /// Returns sub routine stack length.
-    fn len(&self) -> usize;
-
-    /// Returns `true` if sub routine stack is empty.
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Returns current sub routine index.
-    fn routine_idx(&self) -> usize;
-
-    /// Sets new code section without touching subroutine stack.
-    ///
-    /// This is used for [`bytecode::opcode::JUMPF`] opcode. Where
-    /// tail call is performed.
-    fn set_routine_idx(&mut self, idx: usize);
-
-    /// Pushes a new frame to the stack and new code index.
-    fn push(&mut self, old_program_counter: usize, new_idx: usize) -> bool;
-
-    /// Pops previous subroutine, sets previous code index and returns program counter.
-    fn pop(&mut self) -> Option<usize>;
+    /// Returns `true` if the `new_words` for the current context memory will
+    /// make the shared buffer length exceed the `memory_limit`.
+    #[cfg(feature = "memory_limit")]
+    fn limit_reached(&self, new_words: usize) -> bool;
 }
 
 /// Functions needed for Interpreter Stack operations.
@@ -133,10 +162,16 @@ pub trait StackTr {
     /// Returns stack length.
     fn len(&self) -> usize;
 
+    /// Returns stack content.
+    fn data(&self) -> &[U256];
+
     /// Returns `true` if stack is empty.
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Clears the stack.
+    fn clear(&mut self);
 
     /// Pushes values to the stack.
     ///
@@ -146,6 +181,15 @@ pub trait StackTr {
     /// Error is internally set in interpreter.
     #[must_use]
     fn push(&mut self, value: U256) -> bool;
+
+    /// Pushes slice to the stack.
+    ///
+    /// Returns `true` if push was successful, `false` if stack overflow.
+    ///
+    /// # Note
+    /// Error is internally set in interpreter.
+    #[must_use]
+    fn push_slice(&mut self, slice: &[u8]) -> bool;
 
     /// Pushes B256 value to the stack.
     ///
@@ -166,7 +210,7 @@ pub trait StackTr {
     /// Returns top value from the stack.
     #[must_use]
     fn top(&mut self) -> Option<&mut U256> {
-        self.popn_top::<0>().map(|(_, top)| top)
+        self.popn_top().map(|([], top)| top)
     }
 
     /// Pops one value from the stack.
@@ -180,12 +224,13 @@ pub trait StackTr {
     /// Internally call [`StackTr::pop`] and converts [`U256`] into [`Address`].
     #[must_use]
     fn pop_address(&mut self) -> Option<Address> {
-        self.pop().map(|value| Address::from(value.to_be_bytes()))
+        self.pop().map(|value| value.into_address())
     }
 
     /// Exchanges two values on the stack.
     ///
     /// Indexes are based from the top of the stack.
+    /// `n` is the first index, and the second index is calculated as `n + m`.
     ///
     /// Returns `true` if swap was successful, `false` if stack underflow.
     #[must_use]
@@ -200,29 +245,10 @@ pub trait StackTr {
     fn dup(&mut self, n: usize) -> bool;
 }
 
-/// EOF data fetching.
-pub trait EofData {
-    /// Returns EOF data.
-    fn data(&self) -> &[u8];
-    /// Returns EOF data slice.
-    fn data_slice(&self, offset: usize, len: usize) -> &[u8];
-    /// Returns EOF data size.
-    fn data_size(&self) -> usize;
-}
-
-/// EOF code info.
-pub trait EofCodeInfo {
-    /// Returns code information containing stack information.
-    fn code_info(&self, idx: usize) -> Option<&CodeInfo>;
-
-    /// Returns program counter at the start of code section.
-    fn code_section_pc(&self, idx: usize) -> Option<usize>;
-}
-
 /// Returns return data.
 pub trait ReturnData {
     /// Returns return data.
-    fn buffer(&self) -> &[u8];
+    fn buffer(&self) -> &Bytes;
 
     /// Sets return buffer.
     fn set_buffer(&mut self, bytes: Bytes);
@@ -233,38 +259,65 @@ pub trait ReturnData {
     }
 }
 
+/// Trait controls execution of the loop.
 pub trait LoopControl {
-    fn set_instruction_result(&mut self, result: InstructionResult);
-    fn set_next_action(&mut self, action: InterpreterAction, result: InstructionResult);
-    fn gas(&self) -> &Gas;
-    fn gas_mut(&mut self) -> &mut Gas;
-    fn instruction_result(&self) -> InstructionResult;
-    fn take_next_action(&mut self) -> InterpreterAction;
+    /// Returns `true` if the loop should continue.
+    fn is_not_end(&self) -> bool;
+    /// Is end of the loop.
+    #[inline]
+    fn is_end(&self) -> bool {
+        !self.is_not_end()
+    }
+    /// Sets the `end` flag internally. Action should be taken after.
+    fn reset_action(&mut self);
+    /// Set return action.
+    fn set_action(&mut self, action: InterpreterAction);
+    /// Returns the current action.
+    fn action(&mut self) -> &mut Option<InterpreterAction>;
+    /// Returns instruction result
+    #[inline]
+    fn instruction_result(&mut self) -> Option<InstructionResult> {
+        self.action()
+            .as_ref()
+            .and_then(|action| action.instruction_result())
+    }
 }
 
+/// Runtime flags that control interpreter execution behavior.
 pub trait RuntimeFlag {
+    /// Returns true if the current execution context is static (read-only).
     fn is_static(&self) -> bool;
-    fn is_eof(&self) -> bool;
-    fn is_eof_init(&self) -> bool;
+    /// Returns the current EVM specification ID.
     fn spec_id(&self) -> SpecId;
 }
 
+/// Trait for interpreter execution.
 pub trait Interp {
+    /// The instruction type.
     type Instruction;
+    /// The action type returned after execution.
     type Action;
 
+    /// Runs the interpreter with the given instruction table.
     fn run(&mut self, instructions: &[Self::Instruction; 256]) -> Self::Action;
 }
 
+/// Trait defining the component types used by an interpreter implementation.
 pub trait InterpreterTypes {
+    /// Stack implementation type.
     type Stack: StackTr;
+    /// Memory implementation type.
     type Memory: MemoryTr;
-    type Bytecode: Jumps + Immediates + LegacyBytecode + EofData + EofContainer + EofCodeInfo;
+    /// Bytecode implementation type.
+    type Bytecode: Jumps + Immediates + LoopControl + LegacyBytecode;
+    /// Return data implementation type.
     type ReturnData: ReturnData;
+    /// Input data implementation type.
     type Input: InputsTr;
-    type SubRoutineStack: SubRoutineStack;
-    type Control: LoopControl;
+    /// Runtime flags implementation type.
     type RuntimeFlag: RuntimeFlag;
+    /// Extended functionality type.
     type Extend;
+    /// Output type for execution results.
     type Output;
 }

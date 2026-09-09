@@ -7,6 +7,499 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [43.0.2](https://github.com/bluealloy/revm/compare/revm-handler-v43.0.0...revm-handler-v43.0.2) - 2026-09-08
+
+### Fixed
+
+- reconcile sibling state gas refills ([#3893](https://github.com/bluealloy/revm/pull/3893))
+- *(eip8037)* place the system call state-gas margin in the reservoir ([#3892](https://github.com/bluealloy/revm/pull/3892))
+
+## [43.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v42.0.1...revm-handler-v43.0.0) - 2026-08-20
+
+### Added
+
+- add async database fiber support ([#3709](https://github.com/bluealloy/revm/pull/3709))
+
+### Fixed
+
+- check call depth in CREATE pre-access checks (EIP-8037) ([#3829](https://github.com/bluealloy/revm/pull/3829))
+
+### Other
+
+- *(handler)* clarify PrecompileProvider::run return semantics ([#3769](https://github.com/bluealloy/revm/pull/3769))
+
+## [42.0.1](https://github.com/bluealloy/revm/compare/revm-handler-v42.0.0...revm-handler-v42.0.1) - 2026-07-23
+
+### Fixed
+
+- *(handler)* forward a precompile's spilled state gas to the frame gas tracker ([#3821](https://github.com/bluealloy/revm/pull/3821))
+
+### Other
+
+- *(handler)* simplify `precompile_output_to_interpreter_result` ([#3821](https://github.com/bluealloy/revm/pull/3821))
+- updated the following local packages: revm-precompile
+
+## [42.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v41.0.0...revm-handler-v42.0.0) - 2026-07-22
+
+### Added
+
+- *(amsterdam)* glamsterdam devnet-7 alignment (EIP-2780 runtime gas phase, fixtures v7.0.0) ([#3795](https://github.com/bluealloy/revm/pull/3795))
+- *(amsterdam)* glam devnet-6 gas accounting & EIP alignment ([#3782](https://github.com/bluealloy/revm/pull/3782))
+- make max refund quotient configurable ([#3757](https://github.com/bluealloy/revm/pull/3757))
+
+### Fixed
+
+- *(inspect)* finalize journal on error to prevent EIP-2929 warm set leak ([#3780](https://github.com/bluealloy/revm/pull/3780))
+- faillible refund ([#3758](https://github.com/bluealloy/revm/pull/3758))
+
+### Other
+
+- *(handler)* validate state before tracking gas ([#3815](https://github.com/bluealloy/revm/pull/3815))
+- *(revme)* separate bytecode from account in test state ([#3803](https://github.com/bluealloy/revm/pull/3803))
+- clarify EIP-7702 regular-gas GasId names ([#3725](https://github.com/bluealloy/revm/pull/3725))
+
+## [41.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v20.0.3...revm-handler-v41.0.0) - 2026-06-11
+
+### Other
+
+- updated the following local packages: revm-bytecode, revm-state, revm-database-interface, revm-context-interface, revm-context, revm-database, revm-interpreter, revm-precompile
+
+## [20.0.3](https://github.com/bluealloy/revm/compare/revm-handler-v20.0.2...revm-handler-v20.0.3) - 2026-05-26
+
+### Added
+
+- Bake EIP-8037 CPSB into gas params ([#3714](https://github.com/bluealloy/revm/pull/3714))
+
+## [20.0.2](https://github.com/bluealloy/revm/compare/revm-handler-v20.0.1...revm-handler-v20.0.2) - 2026-05-22
+
+### Other
+
+- updated the following local packages: revm-database-interface, revm-context-interface, revm-context, revm-database, revm-interpreter, revm-precompile
+
+## [20.0.1](https://github.com/bluealloy/revm/compare/revm-handler-v20.0.0...revm-handler-v20.0.1) - 2026-05-21
+
+### Other
+
+- *(eip8037)* remove dead refill_amount tracking ([#3699](https://github.com/bluealloy/revm/pull/3699))
+
+## [20.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v18.1.0...revm-handler-v20.0.0) - 2026-05-19
+
+### Added
+
+- *(eip8037)* Amsterdam bal-devnet-7 ([#3667](https://github.com/bluealloy/revm/pull/3667))
+- propagate InitialAndFloorGas to validate_against_state_and_deduct_caller ([#3577](https://github.com/bluealloy/revm/pull/3577))
+
+### Fixed
+
+- *(precompile)* halt with PrecompileOOG when precompile over-spends gas ([#3639](https://github.com/bluealloy/revm/pull/3639))
+- re-add PrecompileOutput::gas_refunded ([#3574](https://github.com/bluealloy/revm/pull/3574))
+- *(handler)* skip reimburse_caller and reward_beneficiary when fee charge is disabled ([#3559](https://github.com/bluealloy/revm/pull/3559))
+
+### Other
+
+- *(interpreter)* cache init_code_hash in CreateInputs for inspector reuse ([#3664](https://github.com/bluealloy/revm/pull/3664))
+- Revert "refactor: use `Cow` for warm precompile addresses ([#3652](https://github.com/bluealloy/revm/pull/3652))" ([#3653](https://github.com/bluealloy/revm/pull/3653))
+- use `Cow` for warm precompile addresses ([#3652](https://github.com/bluealloy/revm/pull/3652))
+- reject nonce-max senders before execution ([#3531](https://github.com/bluealloy/revm/pull/3531))
+- audit #[allow] attributes ([#3611](https://github.com/bluealloy/revm/pull/3611))
+- backport v107 release notes from branch ([#3617](https://github.com/bluealloy/revm/pull/3617))
+- enable and fix clippy::missing_const_for_fn ([#3592](https://github.com/bluealloy/revm/pull/3592))
+- avoid cloning precompiles on warmup ([#3586](https://github.com/bluealloy/revm/pull/3586))
+- *(interpreter)* separate instruction and gas tables ([#3561](https://github.com/bluealloy/revm/pull/3561))
+- thread reservoir through OOG constructors ([#3580](https://github.com/bluealloy/revm/pull/3580))
+- pass reservoir into `first_frame_input` ([#3578](https://github.com/bluealloy/revm/pull/3578))
+- rm op-revm (migrated to ethereum-optimism/optimism) ([#3568](https://github.com/bluealloy/revm/pull/3568))
+
+## [18.1.0](https://github.com/bluealloy/revm/compare/revm-handler-v18.0.0...revm-handler-v18.1.0) - 2026-04-17
+
+### Added
+
+- propagate InitialAndFloorGas to validate_against_state_and_deduct_caller ([#3577](https://github.com/bluealloy/revm/pull/3577))
+
+### Fixed
+
+- re-add PrecompileOutput::gas_refunded ([#3574](https://github.com/bluealloy/revm/pull/3574))
+
+### Other
+
+- pass reservoir into `first_frame_input` ([#3578](https://github.com/bluealloy/revm/pull/3578))
+
+## [18.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v17.0.0...revm-handler-v18.0.0) - 2026-04-10
+
+### Added
+
+- add EIP-8037 / TIP-1016 state gas support ([#3406](https://github.com/bluealloy/revm/pull/3406))
+- add CallInput::as_bytes ([#3515](https://github.com/bluealloy/revm/pull/3515))
+- add crate-level re-exports for all revm-* dependencies ([#3507](https://github.com/bluealloy/revm/pull/3507))
+- Part of amsterdam devnet3 EIP updates ([#3438](https://github.com/bluealloy/revm/pull/3438))
+
+### Other
+
+- move EIP-8037 gas cap validation into validate_initial_tx_gas ([#3552](https://github.com/bluealloy/revm/pull/3552))
+- remove option for known bytecode ([#3532](https://github.com/bluealloy/revm/pull/3532))
+- use AnyError for PrecompileError::Fatal and EVMError::Custom ([#3502](https://github.com/bluealloy/revm/pull/3502))
+- *(handler)* rename misleading `underflow` variable to `success` ([#3486](https://github.com/bluealloy/revm/pull/3486))
+
+## [17.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v16.0.0...revm-handler-v17.0.0) - 2026-03-04
+
+### Other
+
+- bump revm-database-interface to v10.0.0
+
+## [16.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v15.0.0...revm-handler-v16.0.0) - 2026-03-02
+
+### Added
+
+- *(gas_params)* add configurable EIP-7702 auth refund ([#3366](https://github.com/bluealloy/revm/pull/3366))
+
+### Fixed
+
+- *(handler)* respect is_fee_charge_disabled in calculate_caller_fee ([#3401](https://github.com/bluealloy/revm/pull/3401))
+
+### Other
+
+- *(handler)* remove Default for EthPrecompiles and EthInstructions ([#3434](https://github.com/bluealloy/revm/pull/3434))
+- remove unused alloy-provider dev-dependency ([#3423](https://github.com/bluealloy/revm/pull/3423))
+- [**breaking**] add logs to Revert and Halt variants of ExecutionResult ([#3424](https://github.com/bluealloy/revm/pull/3424))
+- [**breaking**] add ResultGas struct to ExecutionResult ([#3413](https://github.com/bluealloy/revm/pull/3413))
+- [**breaking**] flatten Bytecode ([#3375](https://github.com/bluealloy/revm/pull/3375))
+- remove GPL mention and update gmp feature comments ([#3383](https://github.com/bluealloy/revm/pull/3383))
+- use fixed bytes hashmaps from alloy-core ([#3358](https://github.com/bluealloy/revm/pull/3358))
+- *(handler)* extract duplicate ContextError handling ([#3312](https://github.com/bluealloy/revm/pull/3312))
+- *(revm-handler)* add ItemOrResult::map_item (alias map_frame) ([#3320](https://github.com/bluealloy/revm/pull/3320))
+
+## [15.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v14.1.0...revm-handler-v15.0.0) - 2026-01-15
+
+### Added
+
+- add `new_oog` helpers to InterpreterResult, CallOutcome, CreateOutcome, and FrameResult ([#3309](https://github.com/bluealloy/revm/pull/3309))
+- new gas params, tx initial gas and codedeposit ([#3260](https://github.com/bluealloy/revm/pull/3260))
+- move GasParams to Cfg ([#3229](https://github.com/bluealloy/revm/pull/3229))
+- Gas params ([#3132](https://github.com/bluealloy/revm/pull/3132))
+- *(create)* Implement Cache for CreateInputs::created_address ([#3218](https://github.com/bluealloy/revm/pull/3218))
+- JournaledAccount sload/sstore ([#3201](https://github.com/bluealloy/revm/pull/3201))
+- Restrict Database::Error. JournaledAccountTr ([#3199](https://github.com/bluealloy/revm/pull/3199))
+
+### Fixed
+
+- *(create)* Fix CreateInputs::created_address Cache invalidation ([#3222](https://github.com/bluealloy/revm/pull/3222))
+
+### Other
+
+- apply improvements from ai-bot labeled PRs ([#3297](https://github.com/bluealloy/revm/pull/3297))
+- fix typos, grammar errors, and improve documentation consistency ([#3294](https://github.com/bluealloy/revm/pull/3294))
+- happy new year, 2026 licence ([#3272](https://github.com/bluealloy/revm/pull/3272))
+- description of `Handler::validate_against_state_and_deduct_caller` should match responsibilities ([#3256](https://github.com/bluealloy/revm/pull/3256))
+- *(handler)* eliminate code duplication in transaction validation ([#3243](https://github.com/bluealloy/revm/pull/3243))
+- *(handler)* validate_initial_tx_gas takes &mut Evm  ([#3235](https://github.com/bluealloy/revm/pull/3235))
+- *(clippy)* remove unused imports ([#3227](https://github.com/bluealloy/revm/pull/3227))
+- optimize vector initialization using size hints ([#3200](https://github.com/bluealloy/revm/pull/3200))
+- apply_auth_list helper fn ([#3187](https://github.com/bluealloy/revm/pull/3187))
+- *(fmt)* merge all imports ([#3184](https://github.com/bluealloy/revm/pull/3184))
+
+## [14.1.0](https://github.com/bluealloy/revm/compare/revm-handler-v14.0.0...revm-handler-v14.1.0) - 2025-11-14
+
+### Other
+
+- updated the following local packages: revm-context-interface, revm-context, revm-database, revm-interpreter
+
+## [14.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v12.0.2...revm-handler-v14.0.0) - 2025-11-10
+
+### Added
+
+- process precompile logs to inspector ([#3148](https://github.com/bluealloy/revm/pull/3148))
+- add gas refund to PrecompileOutput ([#3152](https://github.com/bluealloy/revm/pull/3152))
+
+### Other
+
+- merge v98 versions bumps ([#3155](https://github.com/bluealloy/revm/pull/3155))
+
+## [12.0.2](https://github.com/bluealloy/revm/compare/revm-handler-v12.0.1...revm-handler-v12.0.2) - 2025-11-10
+
+### Other
+
+- updated the following local packages: revm-database, revm-context
+
+## [12.0.1](https://github.com/bluealloy/revm/compare/revm-handler-v12.0.0...revm-handler-v12.0.1) - 2025-11-07
+
+### Other
+
+- updated the following local packages: revm-primitives, revm-context, revm-bytecode, revm-state, revm-database-interface, revm-context-interface, revm-database, revm-interpreter, revm-precompile
+
+## [12.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v11.2.0...revm-handler-v12.0.0) - 2025-10-30
+
+### Added
+
+- JournaledAccount, a nice way to update and track changes ([#3086](https://github.com/bluealloy/revm/pull/3086))
+- dont load access list immediately ([#3116](https://github.com/bluealloy/revm/pull/3116))
+
+### Fixed
+
+- hook up Cfg::memory_limit ([#3129](https://github.com/bluealloy/revm/pull/3129))
+
+### Other
+
+- *(op)* use helper function in validate against state ([#3069](https://github.com/bluealloy/revm/pull/3069))
+- remove redundant alloy-eip7702 from handler dev-dependencies ([#3105](https://github.com/bluealloy/revm/pull/3105))
+
+## [11.2.0](https://github.com/bluealloy/revm/compare/revm-handler-v11.1.2...revm-handler-v11.2.0) - 2025-10-17
+
+### Added
+
+- Optional Bytecode in CallInput ([#3110](https://github.com/bluealloy/revm/pull/3110))
+
+## [11.1.2](https://github.com/bluealloy/revm/compare/revm-handler-v11.1.1...revm-handler-v11.1.2) - 2025-10-15
+
+### Other
+
+- updated the following local packages: revm-bytecode, revm-state, revm-database-interface, revm-context-interface, revm-context, revm-database, revm-interpreter
+
+## [11.1.1](https://github.com/bluealloy/revm/compare/revm-handler-v11.1.0...revm-handler-v11.1.1) - 2025-10-15
+
+### Other
+
+- resize short addresses bitvec instead of reallocating ([#3083](https://github.com/bluealloy/revm/pull/3083))
+- *(handler)* extract duplicate gas price validation ([#3045](https://github.com/bluealloy/revm/pull/3045))
+
+## [11.1.0](https://github.com/bluealloy/revm/compare/revm-handler-v11.0.0...revm-handler-v11.1.0) - 2025-10-09
+
+### Other
+
+- helper calculate_caller_fee ([#3040](https://github.com/bluealloy/revm/pull/3040))
+
+## [11.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v10.0.1...revm-handler-v11.0.0) - 2025-10-07
+
+### Added
+
+- Support bubbling up first precompile error messages  ([#2905](https://github.com/bluealloy/revm/pull/2905))
+- in JumpTable use Bytes instead of BitVec ([#3014](https://github.com/bluealloy/revm/pull/3014))
+- add transaction index to batch execution error handling ([#3000](https://github.com/bluealloy/revm/pull/3000))
+- allow EIP-7623 to be disabled ([#2985](https://github.com/bluealloy/revm/pull/2985))
+- send bytecode with call input ([#2963](https://github.com/bluealloy/revm/pull/2963))
+- *(revme)* ef blockchain tests cli ([#2935](https://github.com/bluealloy/revm/pull/2935))
+
+### Fixed
+
+- Apply spelling corrections from PRs #2926, #2915, #2908 ([#2978](https://github.com/bluealloy/revm/pull/2978))
+- interpreter_result_mut should return mutable reference ([#2941](https://github.com/bluealloy/revm/pull/2941))
+- FrameStack mark push/end_init as unsafe ([#2929](https://github.com/bluealloy/revm/pull/2929))
+
+### Other
+
+- changelog update for v87 ([#3056](https://github.com/bluealloy/revm/pull/3056))
+- add boundless ([#3043](https://github.com/bluealloy/revm/pull/3043))
+- helper function gas_balance_spending ([#3030](https://github.com/bluealloy/revm/pull/3030))
+- helper caller_initial_modification added ([#3032](https://github.com/bluealloy/revm/pull/3032))
+- Frame use From in place of Into ([#3036](https://github.com/bluealloy/revm/pull/3036))
+- EvmTr and InspectorEvmTr receive all/all_mut fn ([#3037](https://github.com/bluealloy/revm/pull/3037))
+- add ensure_enough_balance helper ([#3033](https://github.com/bluealloy/revm/pull/3033))
+- prealloc few frames ([#2965](https://github.com/bluealloy/revm/pull/2965))
+- Fix infinite recursion in EthPrecompiles PrecompileProvider methods ([#2962](https://github.com/bluealloy/revm/pull/2962))
+- add SECURITY.md ([#2956](https://github.com/bluealloy/revm/pull/2956))
+- update `EthFrame::invalid` visibility ([#2947](https://github.com/bluealloy/revm/pull/2947))
+- remove unused generic from validate_tx_env and fix call site ([#2946](https://github.com/bluealloy/revm/pull/2946))
+- cargo update ([#2930](https://github.com/bluealloy/revm/pull/2930))
+- *(handler)* provide `&CallInputs`to`PrecompileProvider::run` ([#2921](https://github.com/bluealloy/revm/pull/2921))
+
+## [10.0.1](https://github.com/bluealloy/revm/compare/revm-handler-v10.0.0...revm-handler-v10.0.1) - 2025-09-23
+
+### Other
+
+- updated the following local packages: revm-context-interface, revm-context, revm-interpreter
+
+## [10.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v9.0.1...revm-handler-v10.0.0) - 2025-08-23
+
+### Added
+
+- *(fusaka)* Add PrecompileId ([#2904](https://github.com/bluealloy/revm/pull/2904))
+
+## [9.0.1](https://github.com/bluealloy/revm/compare/revm-handler-v9.0.0...revm-handler-v9.0.1) - 2025-08-12
+
+### Other
+
+- updated the following local packages: revm-primitives, revm-bytecode, revm-state, revm-context-interface, revm-database, revm-precompile, revm-database-interface, revm-context, revm-interpreter
+
+## [9.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v8.1.0...revm-handler-v9.0.0) - 2025-08-06
+
+### Added
+
+- short address for journal cold/warm check ([#2849](https://github.com/bluealloy/revm/pull/2849))
+- gastable, record static gas in Interpreter loop ([#2822](https://github.com/bluealloy/revm/pull/2822))
+- fix renamed functions for system_call ([#2824](https://github.com/bluealloy/revm/pull/2824))
+- Align naming of SystemCallEvm function to ExecuteEvm ([#2814](https://github.com/bluealloy/revm/pull/2814))
+
+### Fixed
+
+- nonce changed is not reverted in journal if fail due to insufficient balance ([#2805](https://github.com/bluealloy/revm/pull/2805))
+
+### Other
+
+- update README.md ([#2842](https://github.com/bluealloy/revm/pull/2842))
+- rm commented code ([#2839](https://github.com/bluealloy/revm/pull/2839))
+- *(benches)* clean up criterion callsites ([#2833](https://github.com/bluealloy/revm/pull/2833))
+- improve ExtBytecode hash handling ([#2826](https://github.com/bluealloy/revm/pull/2826))
+- fix run-tests.sh ([#2801](https://github.com/bluealloy/revm/pull/2801))
+- reuse global crypto provide idea ([#2786](https://github.com/bluealloy/revm/pull/2786))
+- add rust-version and note about MSRV ([#2789](https://github.com/bluealloy/revm/pull/2789))
+- Add dyn Crypto trait to PrecompileFn ([#2772](https://github.com/bluealloy/revm/pull/2772))
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+
+## [8.1.0](https://github.com/bluealloy/revm/compare/revm-handler-v8.0.3...revm-handler-v8.1.0) - 2025-07-23
+
+### Added
+
+- add a way for precompiles to revert ([#2711](https://github.com/bluealloy/revm/pull/2711))
+
+### Fixed
+
+- fully deprecate serde-json ([#2767](https://github.com/bluealloy/revm/pull/2767))
+- system call should have 30M gas limit ([#2755](https://github.com/bluealloy/revm/pull/2755))
+- gas deduction with `disable_balance_check` ([#2699](https://github.com/bluealloy/revm/pull/2699))
+
+### Other
+
+- change gas parameter to immutable reference ([#2702](https://github.com/bluealloy/revm/pull/2702))
+- remove State bound from JournalTr in Handler::Evm ([#2715](https://github.com/bluealloy/revm/pull/2715))
+
+## [8.0.3](https://github.com/bluealloy/revm/compare/revm-handler-v8.0.2...revm-handler-v8.0.3) - 2025-07-14
+
+### Other
+
+- simplify gas calculations by introducing a used() method ([#2703](https://github.com/bluealloy/revm/pull/2703))
+
+## [8.0.2](https://github.com/bluealloy/revm/compare/revm-handler-v8.0.1...revm-handler-v8.0.2) - 2025-07-03
+
+### Other
+
+- document external state transitions for EIP-4788 and EIP-2935 ([#2678](https://github.com/bluealloy/revm/pull/2678))
+- minor fixes ([#2686](https://github.com/bluealloy/revm/pull/2686))
+- fix in pre_execution.rs about nonce bump for CREATE ([#2684](https://github.com/bluealloy/revm/pull/2684))
+
+## [8.0.1](https://github.com/bluealloy/revm/compare/revm-handler-v7.0.1...revm-handler-v8.0.1) - 2025-06-30
+
+### Added
+
+- optional_eip3541 ([#2661](https://github.com/bluealloy/revm/pull/2661))
+
+### Other
+
+- cargo clippy --fix --all ([#2671](https://github.com/bluealloy/revm/pull/2671))
+- use TxEnv::builder ([#2652](https://github.com/bluealloy/revm/pull/2652))
+- fix copy-pasted inner doc comments ([#2663](https://github.com/bluealloy/revm/pull/2663))
+
+## [7.0.1](https://github.com/bluealloy/revm/compare/revm-handler-v7.0.0...revm-handler-v7.0.1) - 2025-06-20
+
+### Fixed
+
+- call stack_frame.clear() at end ([#2656](https://github.com/bluealloy/revm/pull/2656))
+
+## [7.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v6.0.0...revm-handler-v7.0.0) - 2025-06-19
+
+### Added
+
+- remove EOF ([#2644](https://github.com/bluealloy/revm/pull/2644))
+- configurable contract size limit ([#2611](https://github.com/bluealloy/revm/pull/2611)) ([#2642](https://github.com/bluealloy/revm/pull/2642))
+- *(precompile)* rug/gmp-based modexp ([#2596](https://github.com/bluealloy/revm/pull/2596))
+- change blob_max_count to max_blobs_per_tx ([#2608](https://github.com/bluealloy/revm/pull/2608))
+- add optional priority fee check configuration ([#2588](https://github.com/bluealloy/revm/pull/2588))
+
+### Other
+
+- lints handler inspector interpreter ([#2646](https://github.com/bluealloy/revm/pull/2646))
+- bump all deps ([#2647](https://github.com/bluealloy/revm/pull/2647))
+- re-use frame allocation ([#2636](https://github.com/bluealloy/revm/pull/2636))
+- store coinbase address separately to avoid cloning warm addresses in the common case ([#2634](https://github.com/bluealloy/revm/pull/2634))
+- rename `transact` methods ([#2616](https://github.com/bluealloy/revm/pull/2616))
+
+## [6.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v5.0.1...revm-handler-v6.0.0) - 2025-06-06
+
+### Added
+
+- add with_caller for system_transact ([#2587](https://github.com/bluealloy/revm/pull/2587))
+- *(Osaka)* EIP-7825 tx limit cap ([#2575](https://github.com/bluealloy/revm/pull/2575))
+- expand timestamp/block_number to u256 ([#2546](https://github.com/bluealloy/revm/pull/2546))
+- transact multi tx ([#2517](https://github.com/bluealloy/revm/pull/2517))
+
+### Other
+
+- tag v75 revm v24.0.1 ([#2563](https://github.com/bluealloy/revm/pull/2563)) ([#2589](https://github.com/bluealloy/revm/pull/2589))
+- *(docs)* add lints to database-interface and op-revm crates ([#2568](https://github.com/bluealloy/revm/pull/2568))
+- unify calling of journal account loading ([#2561](https://github.com/bluealloy/revm/pull/2561))
+- ContextTr rm *_ref, and add *_mut fn ([#2560](https://github.com/bluealloy/revm/pull/2560))
+- *(cfg)* add tx_chain_id_check fields. Optimize effective gas cost calc ([#2557](https://github.com/bluealloy/revm/pull/2557))
+- simplify Interpreter loop ([#2544](https://github.com/bluealloy/revm/pull/2544))
+
+## [5.0.1](https://github.com/bluealloy/revm/compare/revm-handler-v5.0.0...revm-handler-v5.0.1) - 2025-05-31
+
+### Other
+
+- unify calling of journal account loading
+
+## [5.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v4.1.0...revm-handler-v5.0.0) - 2025-05-22
+
+### Added
+
+- make blob max number optional ([#2532](https://github.com/bluealloy/revm/pull/2532))
+
+### Other
+
+- add TxEnvBuilder::build_fill ([#2536](https://github.com/bluealloy/revm/pull/2536))
+- make crates.io version badge clickable ([#2526](https://github.com/bluealloy/revm/pull/2526))
+- fix clippy ([#2523](https://github.com/bluealloy/revm/pull/2523))
+- Storage Types Alias ([#2461](https://github.com/bluealloy/revm/pull/2461))
+
+
+## [4.1.0](https://github.com/bluealloy/revm/compare/revm-handler-v4.0.0...revm-handler-v4.1.0) - 2025-05-07
+
+Dependency bump
+
+## [4.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v3.0.1...revm-handler-v4.0.0) - 2025-05-07
+
+### Added
+
+- system_call switch order of inputs, address than bytes ([#2485](https://github.com/bluealloy/revm/pull/2485))
+- *(Osaka)* disable EOF ([#2480](https://github.com/bluealloy/revm/pull/2480))
+- skip cloning of call input from shared memory ([#2462](https://github.com/bluealloy/revm/pull/2462))
+- Add a custom address to the CreateScheme. ([#2464](https://github.com/bluealloy/revm/pull/2464))
+- remove spec id verification on `apply_eip7702_auth_list` ([#2466](https://github.com/bluealloy/revm/pull/2466))
+- *(Handler)* merge state validation with deduct_caller ([#2460](https://github.com/bluealloy/revm/pull/2460))
+- replace input Bytes and refactored code where required ([#2453](https://github.com/bluealloy/revm/pull/2453))
+- *(tx)* Add Either RecoveredAuthorization ([#2448](https://github.com/bluealloy/revm/pull/2448))
+- *(EOF)* Changes needed for devnet-1 ([#2377](https://github.com/bluealloy/revm/pull/2377))
+- Move SharedMemory buffer to context ([#2382](https://github.com/bluealloy/revm/pull/2382))
+
+### Fixed
+
+- *(eof)* extdelegate bytecode check after eip7702 load ([#2417](https://github.com/bluealloy/revm/pull/2417))
+- skip account list for legacy ([#2400](https://github.com/bluealloy/revm/pull/2400))
+
+### Other
+
+- Add clones to FrameData ([#2482](https://github.com/bluealloy/revm/pull/2482))
+- Add Bytecode address to Interpreter ([#2479](https://github.com/bluealloy/revm/pull/2479))
+- copy edit The Book ([#2463](https://github.com/bluealloy/revm/pull/2463))
+- bump dependency version ([#2431](https://github.com/bluealloy/revm/pull/2431))
+- fixed broken link ([#2421](https://github.com/bluealloy/revm/pull/2421))
+- backport from release branch ([#2415](https://github.com/bluealloy/revm/pull/2415)) ([#2416](https://github.com/bluealloy/revm/pull/2416))
+- *(lints)* revm-context lints ([#2404](https://github.com/bluealloy/revm/pull/2404))
+
+## [3.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v2.0.0...revm-handler-v3.0.0) - 2025-04-09
+
+### Added
+
+- support for system calls ([#2350](https://github.com/bluealloy/revm/pull/2350))
+
+### Other
+
+- make blob params u64 ([#2385](https://github.com/bluealloy/revm/pull/2385))
+- add 0x prefix to b256! and address! calls ([#2345](https://github.com/bluealloy/revm/pull/2345))
+
 ## [2.0.0](https://github.com/bluealloy/revm/compare/revm-handler-v1.0.0...revm-handler-v2.0.0) - 2025-03-28
 
 ### Added

@@ -1,73 +1,94 @@
-use crate::{
-    gas,
-    interpreter::Interpreter,
-    interpreter_types::{InterpreterTypes, LoopControl, MemoryTr, RuntimeFlag, StackTr},
-    Host,
-};
+use crate::interpreter::resize_memory;
+use crate::interpreter_types::{InterpreterTypes as ITy, MemoryTr, RuntimeFlag, StackTr};
+use crate::{InstructionContext as Ictx, InstructionExecResult as Result};
+use context_interface::Host;
 use core::cmp::max;
 use primitives::U256;
 
-pub fn mload<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::VERYLOW);
-    popn_top!([], top, interpreter);
-    let offset = as_usize_or_fail!(interpreter, top);
-    resize_memory!(interpreter, offset, 32);
-    *top = U256::try_from_be_slice(interpreter.memory.slice_len(offset, 32).as_ref()).unwrap()
+/// Implements the MLOAD instruction.
+///
+/// Loads a 32-byte word from memory.
+pub fn mload<IT: ITy, H: Host + ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([], top, context.interpreter);
+    let offset = as_usize_or_fail!(context.interpreter, top);
+    resize_memory(
+        &mut context.interpreter.gas,
+        &mut context.interpreter.memory,
+        context.host.gas_params(),
+        offset,
+        32,
+    )?;
+    *top =
+        U256::try_from_be_slice(context.interpreter.memory.slice_len(offset, 32).as_ref()).unwrap();
+    Ok(())
 }
 
-pub fn mstore<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::VERYLOW);
-    popn!([offset, value], interpreter);
-    let offset = as_usize_or_fail!(interpreter, offset);
-    resize_memory!(interpreter, offset, 32);
-    interpreter.memory.set(offset, &value.to_be_bytes::<32>());
+/// Implements the MSTORE instruction.
+///
+/// Stores a 32-byte word to memory.
+pub fn mstore<IT: ITy, H: Host + ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn!([offset, value], context.interpreter);
+    let offset = as_usize_or_fail!(context.interpreter, offset);
+    context
+        .interpreter
+        .resize_memory(context.host.gas_params(), offset, 32)?;
+    context
+        .interpreter
+        .memory
+        .set(offset, &value.to_be_bytes::<32>());
+    Ok(())
 }
 
-pub fn mstore8<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::VERYLOW);
-    popn!([offset, value], interpreter);
-    let offset = as_usize_or_fail!(interpreter, offset);
-    resize_memory!(interpreter, offset, 1);
-    interpreter.memory.set(offset, &[value.byte(0)]);
+/// Implements the MSTORE8 instruction.
+///
+/// Stores a single byte to memory.
+pub fn mstore8<IT: ITy, H: Host + ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn!([offset, value], context.interpreter);
+    let offset = as_usize_or_fail!(context.interpreter, offset);
+    context
+        .interpreter
+        .resize_memory(context.host.gas_params(), offset, 1)?;
+    context.interpreter.memory.set(offset, &[value.byte(0)]);
+    Ok(())
 }
 
-pub fn msize<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::BASE);
-    push!(interpreter, U256::from(interpreter.memory.size()));
+/// Implements the MSIZE instruction.
+///
+/// Gets the size of active memory in bytes.
+pub fn msize<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    push!(
+        context.interpreter,
+        U256::from(context.interpreter.memory.size())
+    );
+    Ok(())
 }
 
-// EIP-5656: MCOPY - Memory copying instruction
-pub fn mcopy<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    check!(interpreter, CANCUN);
-    popn!([dst, src, len], interpreter);
+/// Implements the MCOPY instruction.
+///
+/// EIP-5656: Memory copying instruction that copies memory from one location to another.
+pub fn mcopy<IT: ITy, H: Host + ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    check!(context.interpreter, CANCUN);
+    popn!([dst, src, len], context.interpreter);
 
     // Into usize or fail
-    let len = as_usize_or_fail!(interpreter, len);
+    let len = as_usize_or_fail!(context.interpreter, len);
     // Deduce gas
-    gas_or_fail!(interpreter, gas::copy_cost_verylow(len));
+    gas!(
+        context.interpreter,
+        context.host.gas_params().mcopy_cost(len)
+    );
+
     if len == 0 {
-        return;
+        return Ok(());
     }
 
-    let dst = as_usize_or_fail!(interpreter, dst);
-    let src = as_usize_or_fail!(interpreter, src);
+    let dst = as_usize_or_fail!(context.interpreter, dst);
+    let src = as_usize_or_fail!(context.interpreter, src);
     // Resize memory
-    resize_memory!(interpreter, max(dst, src), len);
+    context
+        .interpreter
+        .resize_memory(context.host.gas_params(), max(dst, src), len)?;
     // Copy memory in place
-    interpreter.memory.copy(dst, src, len);
+    context.interpreter.memory.copy(dst, src, len);
+    Ok(())
 }

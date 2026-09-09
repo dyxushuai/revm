@@ -1,8 +1,9 @@
 use auto_impl::auto_impl;
-use context::{Database, Journal, JournalEntry};
+use context::{Database, Journal, JournalEntry, JournalTr};
+use handler::FrameResult;
 use interpreter::{
-    interpreter::EthInterpreter, CallInputs, CallOutcome, CreateInputs, CreateOutcome,
-    EOFCreateInputs, Interpreter, InterpreterTypes,
+    interpreter::EthInterpreter, CallInputs, CallOutcome, CreateInputs, CreateOutcome, FrameInput,
+    Interpreter, InterpreterTypes,
 };
 use primitives::{Address, Log, U256};
 use state::EvmState;
@@ -14,11 +15,11 @@ use state::EvmState;
 /// Object that is implemented this trait is used in `InspectorHandler` to trace the EVM execution.
 /// And API that allow calling the inspector can be found in [`crate::InspectEvm`] and [`crate::InspectCommitEvm`].
 #[auto_impl(&mut, Box)]
-pub trait Inspector<CTX, INTR: InterpreterTypes = EthInterpreter> {
+pub trait Inspector<CTX, INTR: InterpreterTypes = EthInterpreter, FI = FrameInput, FR = FrameResult>
+{
     /// Called before the interpreter is initialized.
     ///
-    /// If `interp.instruction_result` is set to anything other than [`interpreter::InstructionResult::Continue`]
-    /// then the execution of the interpreter is skipped.
+    /// If `interp.bytecode.set_action` is set the execution of the interpreter is skipped.
     #[inline]
     fn initialize_interp(&mut self, interp: &mut Interpreter<INTR>, context: &mut CTX) {
         let _ = interp;
@@ -32,7 +33,7 @@ pub trait Inspector<CTX, INTR: InterpreterTypes = EthInterpreter> {
     ///
     /// # Example
     ///
-    /// To get the current opcode, use `interp.current_opcode()`.
+    /// To get the current opcode, use `interp.bytecode.opcode()`.
     #[inline]
     fn step(&mut self, interp: &mut Interpreter<INTR>, context: &mut CTX) {
         let _ = interp;
@@ -41,25 +42,56 @@ pub trait Inspector<CTX, INTR: InterpreterTypes = EthInterpreter> {
 
     /// Called after `step` when the instruction has been executed.
     ///
-    /// Setting `interp.instruction_result` to anything other than [`interpreter::InstructionResult::Continue`]
-    /// alters the execution of the interpreter.
+    /// Setting `interp.bytecode.set_action` will result in stopping the execution of the interpreter.
     #[inline]
     fn step_end(&mut self, interp: &mut Interpreter<INTR>, context: &mut CTX) {
         let _ = interp;
         let _ = context;
     }
 
-    /// Called when a log is emitted.
+    /// Called when a log is emitted, called on every new log.
+    /// If there is a needs for Interpreter context, use [`Inspector::log_full`] instead.
     #[inline]
-    fn log(&mut self, interp: &mut Interpreter<INTR>, context: &mut CTX, log: Log) {
-        let _ = interp;
+    fn log(&mut self, context: &mut CTX, log: Log) {
         let _ = context;
         let _ = log;
     }
 
+    /// Called when a log is emitted with the interpreter context.
+    ///
+    /// This will not happen only if custom precompiles where logs will be
+    /// gethered after precompile call.
+    fn log_full(&mut self, interpreter: &mut Interpreter<INTR>, context: &mut CTX, log: Log) {
+        let _ = interpreter;
+        self.log(context, log);
+    }
+
+    /// Called before call/create dispatch. Called with a mutable reference to
+    /// the frame input, allowing mutations of the input before the variant-specific
+    /// hooks (`call`/`create`) are called.
+    ///
+    /// Returning `Some(FrameResult)` will skip execution of the frame entirely,
+    /// and also skips calling `call()`/`create()`. `frame_end` will still be called.
+    #[inline]
+    fn frame_start(&mut self, context: &mut CTX, frame_input: &mut FI) -> Option<FR> {
+        let _ = context;
+        let _ = frame_input;
+        None
+    }
+
+    /// Called after `call_end()`/`create_end()` variant-specific hooks complete.
+    ///
+    /// Allows transformation of the final result regardless of frame kind.
+    #[inline]
+    fn frame_end(&mut self, context: &mut CTX, frame_input: &FI, frame_result: &mut FR) {
+        let _ = context;
+        let _ = frame_input;
+        let _ = frame_result;
+    }
+
     /// Called whenever a call to a contract is about to start.
     ///
-    /// InstructionResulting anything other than [`interpreter::InstructionResult::Continue`] overrides the result of the call.
+    /// Returning `CallOutcome` will override the result of the call.
     #[inline]
     fn call(&mut self, context: &mut CTX, inputs: &mut CallInputs) -> Option<CallOutcome> {
         let _ = context;
@@ -93,38 +125,12 @@ pub trait Inspector<CTX, INTR: InterpreterTypes = EthInterpreter> {
 
     /// Called when a contract has been created.
     ///
-    /// InstructionResulting anything other than the values passed to this function (`(ret, remaining_gas,
-    /// address, out)`) will alter the result of the create.
+    /// Modifying the outcome will alter the result of the create operation.
     #[inline]
     fn create_end(
         &mut self,
         context: &mut CTX,
         inputs: &CreateInputs,
-        outcome: &mut CreateOutcome,
-    ) {
-        let _ = context;
-        let _ = inputs;
-        let _ = outcome;
-    }
-
-    /// Called when EOF creating is called.
-    ///
-    /// This can happen from create TX or from EOFCREATE opcode.
-    fn eofcreate(
-        &mut self,
-        context: &mut CTX,
-        inputs: &mut EOFCreateInputs,
-    ) -> Option<CreateOutcome> {
-        let _ = context;
-        let _ = inputs;
-        None
-    }
-
-    /// Called when eof creating has ended.
-    fn eofcreate_end(
-        &mut self,
-        context: &mut CTX,
-        inputs: &EOFCreateInputs,
         outcome: &mut CreateOutcome,
     ) {
         let _ = context;
@@ -141,41 +147,91 @@ pub trait Inspector<CTX, INTR: InterpreterTypes = EthInterpreter> {
     }
 }
 
+impl<CTX, INTR: InterpreterTypes, FI, FR, L, R> Inspector<CTX, INTR, FI, FR> for (L, R)
+where
+    L: Inspector<CTX, INTR, FI, FR>,
+    R: Inspector<CTX, INTR, FI, FR>,
+{
+    fn initialize_interp(&mut self, interp: &mut Interpreter<INTR>, context: &mut CTX) {
+        self.0.initialize_interp(interp, context);
+        self.1.initialize_interp(interp, context);
+    }
+
+    fn step(&mut self, interp: &mut Interpreter<INTR>, context: &mut CTX) {
+        self.0.step(interp, context);
+        self.1.step(interp, context);
+    }
+
+    fn step_end(&mut self, interp: &mut Interpreter<INTR>, context: &mut CTX) {
+        self.0.step_end(interp, context);
+        self.1.step_end(interp, context);
+    }
+
+    fn log(&mut self, context: &mut CTX, log: Log) {
+        self.0.log(context, log.clone());
+        self.1.log(context, log);
+    }
+
+    fn log_full(&mut self, interp: &mut Interpreter<INTR>, context: &mut CTX, log: Log) {
+        self.0.log_full(interp, context, log.clone());
+        self.1.log_full(interp, context, log);
+    }
+
+    fn frame_start(&mut self, context: &mut CTX, frame_input: &mut FI) -> Option<FR> {
+        let first = self.0.frame_start(context, frame_input);
+        let second = self.1.frame_start(context, frame_input);
+        first.or(second)
+    }
+
+    fn frame_end(&mut self, context: &mut CTX, frame_input: &FI, frame_result: &mut FR) {
+        self.0.frame_end(context, frame_input, frame_result);
+        self.1.frame_end(context, frame_input, frame_result);
+    }
+
+    fn call(&mut self, context: &mut CTX, inputs: &mut CallInputs) -> Option<CallOutcome> {
+        let first = self.0.call(context, inputs);
+        let second = self.1.call(context, inputs);
+        first.or(second)
+    }
+
+    fn call_end(&mut self, context: &mut CTX, inputs: &CallInputs, outcome: &mut CallOutcome) {
+        self.0.call_end(context, inputs, outcome);
+        self.1.call_end(context, inputs, outcome);
+    }
+
+    fn create(&mut self, context: &mut CTX, inputs: &mut CreateInputs) -> Option<CreateOutcome> {
+        let first = self.0.create(context, inputs);
+        let second = self.1.create(context, inputs);
+        first.or(second)
+    }
+
+    fn create_end(
+        &mut self,
+        context: &mut CTX,
+        inputs: &CreateInputs,
+        outcome: &mut CreateOutcome,
+    ) {
+        self.0.create_end(context, inputs, outcome);
+        self.1.create_end(context, inputs, outcome);
+    }
+
+    fn selfdestruct(&mut self, contract: Address, target: Address, value: U256) {
+        self.0.selfdestruct(contract, target, value);
+        self.1.selfdestruct(contract, target, value);
+    }
+}
+
 /// Extends the journal with additional methods that are used by the inspector.
 #[auto_impl(&mut, Box)]
-pub trait JournalExt {
-    /// Get all logs from the journal.
-    fn logs(&self) -> &[Log];
-
+pub trait JournalExt: JournalTr<State = EvmState> {
     /// Get the journal entries that are created from last checkpoint.
     /// new checkpoint is created when sub call is made.
-    fn last_journal(&self) -> &[JournalEntry];
-
-    /// Return the current Journaled state.
-    fn evm_state(&self) -> &EvmState;
-
-    /// Return the mutable current Journaled state.
-    fn evm_state_mut(&mut self) -> &mut EvmState;
+    fn journal(&self) -> &[JournalEntry];
 }
 
 impl<DB: Database> JournalExt for Journal<DB> {
     #[inline]
-    fn logs(&self) -> &[Log] {
-        &self.logs
-    }
-
-    #[inline]
-    fn last_journal(&self) -> &[JournalEntry] {
-        self.journal.last().expect("Journal is never empty")
-    }
-
-    #[inline]
-    fn evm_state(&self) -> &EvmState {
-        &self.state
-    }
-
-    #[inline]
-    fn evm_state_mut(&mut self) -> &mut EvmState {
-        &mut self.state
+    fn journal(&self) -> &[JournalEntry] {
+        &self.journal
     }
 }

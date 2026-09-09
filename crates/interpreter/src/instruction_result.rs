@@ -1,25 +1,33 @@
 use context_interface::{
+    host::LoadError,
     journaled_state::TransferError,
     result::{HaltReason, OutOfGasError, SuccessReason},
 };
 use core::fmt::Debug;
 
+/// Result type returned by instruction implementations.
+///
+/// `Ok(())` means the instruction completed normally and execution should continue.
+/// `Err(result)` means execution should halt with the given [`InstructionResult`].
+pub type InstructionExecResult<T = (), E = InstructionResult> = Result<T, E>;
+
+/// Result of executing an EVM instruction.
+///
+/// This enum represents all possible outcomes when executing an instruction,
+/// including successful execution, reverts, and various error conditions.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum InstructionResult {
-    // Success Codes
-    #[default]
-    /// Execution should continue to the next one.
-    Continue = 0x00,
     /// Encountered a `STOP` opcode
-    Stop,
+    #[default]
+    Stop = 1, // Start at 1 so that `Result<(), _>::Ok(())` is 0.
     /// Return from the current call.
     Return,
     /// Self-destruct the current contract.
     SelfDestruct,
-    /// Return a contract (used in contract creation).
-    ReturnContract,
+    /// Temporarily suspended, for CALL/CREATE.
+    Suspend,
 
     // Revert Codes
     /// Revert the transaction.
@@ -35,13 +43,9 @@ pub enum InstructionResult {
     /// `ExtDelegateCall` calling a non EOF contract.
     InvalidExtDelegateCallTarget,
 
-    // Action Codes
-    /// Indicates a call or contract creation.
-    CallOrCreate = 0x20,
-
     // Error Codes
     /// Out of gas error.
-    OutOfGas = 0x50,
+    OutOfGas = 0x20,
     /// Out of gas error encountered during memory expansion.
     MemoryOOG,
     /// The memory limit of the EVM has been exceeded.
@@ -86,18 +90,8 @@ pub enum InstructionResult {
     CreateInitCodeSizeLimit,
     /// Fatal external error. Returned by database.
     FatalExternalError,
-    /// `RETURNCONTRACT` called outside init EOF code.
-    ReturnContractInNotInitEOF,
-    /// Legacy contract is calling opcode that is enabled only in EOF.
-    EOFOpcodeDisabledInLegacy,
-    /// Stack overflow in EOF subroutine function calls.
-    SubRoutineStackOverflow,
-    /// Aux data overflow, new aux data is larger than `u16` max size.
-    EofAuxDataOverflow,
-    /// Aux data is smaller than already present data size.
-    EofAuxDataTooSmall,
-    /// `EXT*CALL` target address needs to be padded with 0s.
-    InvalidEXTCALLTarget,
+    /// Invalid encoding of an instruction's immediate operand.
+    InvalidImmediateEncoding,
 }
 
 impl From<TransferError> for InstructionResult {
@@ -116,7 +110,6 @@ impl From<SuccessReason> for InstructionResult {
             SuccessReason::Return => InstructionResult::Return,
             SuccessReason::Stop => InstructionResult::Stop,
             SuccessReason::SelfDestruct => InstructionResult::SelfDestruct,
-            SuccessReason::EofReturnContract => InstructionResult::ReturnContract,
         }
     }
 }
@@ -141,6 +134,7 @@ impl From<HaltReason> for InstructionResult {
             HaltReason::OutOfOffset => Self::OutOfOffset,
             HaltReason::CreateCollision => Self::CreateCollision,
             HaltReason::PrecompileError => Self::PrecompileError,
+            HaltReason::PrecompileErrorWithContext(_) => Self::PrecompileError,
             HaltReason::NonceOverflow => Self::NonceOverflow,
             HaltReason::CreateContractSizeLimit => Self::CreateContractSizeLimit,
             HaltReason::CreateContractStartingWithEF => Self::CreateContractStartingWithEF,
@@ -150,25 +144,33 @@ impl From<HaltReason> for InstructionResult {
             HaltReason::CallNotAllowedInsideStatic => Self::CallNotAllowedInsideStatic,
             HaltReason::OutOfFunds => Self::OutOfFunds,
             HaltReason::CallTooDeep => Self::CallTooDeep,
-            HaltReason::EofAuxDataOverflow => Self::EofAuxDataOverflow,
-            HaltReason::EofAuxDataTooSmall => Self::EofAuxDataTooSmall,
-            HaltReason::SubRoutineStackOverflow => Self::SubRoutineStackOverflow,
-            HaltReason::InvalidEXTCALLTarget => Self::InvalidEXTCALLTarget,
         }
     }
 }
 
+impl From<LoadError> for InstructionResult {
+    fn from(error: LoadError) -> Self {
+        match error {
+            LoadError::ColdLoadSkipped => Self::OutOfGas,
+            LoadError::DBError => Self::FatalExternalError,
+        }
+    }
+}
+
+/// Macro that matches all successful instruction results.
+/// Used in pattern matching to handle all successful execution outcomes.
 #[macro_export]
 macro_rules! return_ok {
     () => {
-        $crate::InstructionResult::Continue
-            | $crate::InstructionResult::Stop
+        $crate::InstructionResult::Stop
             | $crate::InstructionResult::Return
             | $crate::InstructionResult::SelfDestruct
-            | $crate::InstructionResult::ReturnContract
+            | $crate::InstructionResult::Suspend
     };
 }
 
+/// Macro that matches all revert instruction results.
+/// Used in pattern matching to handle all revert outcomes.
 #[macro_export]
 macro_rules! return_revert {
     () => {
@@ -181,6 +183,8 @@ macro_rules! return_revert {
     };
 }
 
+/// Macro that matches all error instruction results.
+/// Used in pattern matching to handle all error outcomes.
 #[macro_export]
 macro_rules! return_error {
     () => {
@@ -207,12 +211,7 @@ macro_rules! return_error {
             | $crate::InstructionResult::CreateContractStartingWithEF
             | $crate::InstructionResult::CreateInitCodeSizeLimit
             | $crate::InstructionResult::FatalExternalError
-            | $crate::InstructionResult::ReturnContractInNotInitEOF
-            | $crate::InstructionResult::EOFOpcodeDisabledInLegacy
-            | $crate::InstructionResult::SubRoutineStackOverflow
-            | $crate::InstructionResult::EofAuxDataTooSmall
-            | $crate::InstructionResult::EofAuxDataOverflow
-            | $crate::InstructionResult::InvalidEXTCALLTarget
+            | $crate::InstructionResult::InvalidImmediateEncoding
     };
 }
 
@@ -220,28 +219,31 @@ impl InstructionResult {
     /// Returns whether the result is a success.
     #[inline]
     pub const fn is_ok(self) -> bool {
-        matches!(self, crate::return_ok!())
+        matches!(self, return_ok!())
     }
 
     #[inline]
+    /// Returns whether the result is a success or revert (not an error).
     pub const fn is_ok_or_revert(self) -> bool {
-        matches!(self, crate::return_ok!() | crate::return_revert!())
-    }
-
-    #[inline]
-    pub const fn is_continue(self) -> bool {
-        matches!(self, InstructionResult::Continue)
+        matches!(self, return_ok!() | return_revert!())
     }
 
     /// Returns whether the result is a revert.
     #[inline]
     pub const fn is_revert(self) -> bool {
-        matches!(self, crate::return_revert!())
+        matches!(self, return_revert!())
     }
 
     /// Returns whether the result is an error.
     #[inline]
+    #[deprecated(note = "use `is_halt` instead")]
     pub const fn is_error(self) -> bool {
+        self.is_halt()
+    }
+
+    /// Returns whether the result is a halt (error).
+    #[inline]
+    pub const fn is_halt(self) -> bool {
         matches!(self, return_error!())
     }
 }
@@ -249,22 +251,27 @@ impl InstructionResult {
 /// Internal results that are not exposed externally
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum InternalResult {
-    /// Internal instruction that signals Interpreter should continue running.
-    InternalContinue,
-    /// Internal instruction that signals call or create.
-    InternalCallOrCreate,
     /// Internal CREATE/CREATE starts with 0xEF00
     CreateInitCodeStartingEF00,
     /// Internal to ExtDelegateCall
     InvalidExtDelegateCallTarget,
+    /// Execution suspended internally.
+    Suspend,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+/// Represents the outcome of instruction execution, distinguishing between
+/// success, revert, halt (error), fatal external errors, and internal results.
 pub enum SuccessOrHalt<HaltReasonTr> {
+    /// Successful execution with the specific success reason.
     Success(SuccessReason),
+    /// Execution reverted.
     Revert,
+    /// Execution halted due to an error.
     Halt(HaltReasonTr),
+    /// Fatal external error occurred.
     FatalExternalError,
+    /// Internal execution result not exposed externally.
     Internal(InternalResult),
 }
 
@@ -315,13 +322,12 @@ impl<HALT: From<HaltReason>> From<HaltReason> for SuccessOrHalt<HALT> {
 impl<HaltReasonTr: From<HaltReason>> From<InstructionResult> for SuccessOrHalt<HaltReasonTr> {
     fn from(result: InstructionResult) -> Self {
         match result {
-            InstructionResult::Continue => Self::Internal(InternalResult::InternalContinue), // used only in interpreter loop
             InstructionResult::Stop => Self::Success(SuccessReason::Stop),
             InstructionResult::Return => Self::Success(SuccessReason::Return),
             InstructionResult::SelfDestruct => Self::Success(SuccessReason::SelfDestruct),
+            InstructionResult::Suspend => Self::Internal(InternalResult::Suspend),
             InstructionResult::Revert => Self::Revert,
             InstructionResult::CreateInitCodeStartingEF00 => Self::Revert,
-            InstructionResult::CallOrCreate => Self::Internal(InternalResult::InternalCallOrCreate), // used only in interpreter loop
             InstructionResult::CallTooDeep => Self::Halt(HaltReason::CallTooDeep.into()), // not gonna happen for first call
             InstructionResult::OutOfFunds => Self::Halt(HaltReason::OutOfFunds.into()), // Check for first call is done separately.
             InstructionResult::OutOfGas => {
@@ -342,9 +348,7 @@ impl<HaltReasonTr: From<HaltReason>> From<InstructionResult> for SuccessOrHalt<H
             InstructionResult::ReentrancySentryOOG => {
                 Self::Halt(HaltReason::OutOfGas(OutOfGasError::ReentrancySentry).into())
             }
-            InstructionResult::OpcodeNotFound | InstructionResult::ReturnContractInNotInitEOF => {
-                Self::Halt(HaltReason::OpcodeNotFound.into())
-            }
+            InstructionResult::OpcodeNotFound => Self::Halt(HaltReason::OpcodeNotFound.into()),
             InstructionResult::CallNotAllowedInsideStatic => {
                 Self::Halt(HaltReason::CallNotAllowedInsideStatic.into())
             } // first call is not static call
@@ -361,9 +365,11 @@ impl<HaltReasonTr: From<HaltReason>> From<InstructionResult> for SuccessOrHalt<H
             InstructionResult::OverflowPayment => Self::Halt(HaltReason::OverflowPayment.into()), // Check for first call is done separately.
             InstructionResult::PrecompileError => Self::Halt(HaltReason::PrecompileError.into()),
             InstructionResult::NonceOverflow => Self::Halt(HaltReason::NonceOverflow.into()),
-            InstructionResult::CreateContractSizeLimit
-            | InstructionResult::CreateContractStartingWithEF => {
+            InstructionResult::CreateContractSizeLimit => {
                 Self::Halt(HaltReason::CreateContractSizeLimit.into())
+            }
+            InstructionResult::CreateContractStartingWithEF => {
+                Self::Halt(HaltReason::CreateContractStartingWithEF.into())
             }
             InstructionResult::CreateInitCodeSizeLimit => {
                 Self::Halt(HaltReason::CreateInitCodeSizeLimit.into())
@@ -371,24 +377,11 @@ impl<HaltReasonTr: From<HaltReason>> From<InstructionResult> for SuccessOrHalt<H
             // TODO : (EOF) Add proper Revert subtype.
             InstructionResult::InvalidEOFInitCode => Self::Revert,
             InstructionResult::FatalExternalError => Self::FatalExternalError,
-            InstructionResult::EOFOpcodeDisabledInLegacy => {
-                Self::Halt(HaltReason::OpcodeNotFound.into())
-            }
-            InstructionResult::SubRoutineStackOverflow => {
-                Self::Halt(HaltReason::SubRoutineStackOverflow.into())
-            }
-            InstructionResult::ReturnContract => Self::Success(SuccessReason::EofReturnContract),
-            InstructionResult::EofAuxDataOverflow => {
-                Self::Halt(HaltReason::EofAuxDataOverflow.into())
-            }
-            InstructionResult::EofAuxDataTooSmall => {
-                Self::Halt(HaltReason::EofAuxDataTooSmall.into())
-            }
-            InstructionResult::InvalidEXTCALLTarget => {
-                Self::Halt(HaltReason::InvalidEXTCALLTarget.into())
-            }
             InstructionResult::InvalidExtDelegateCallTarget => {
                 Self::Internal(InternalResult::InvalidExtDelegateCallTarget)
+            }
+            InstructionResult::InvalidImmediateEncoding => {
+                Self::Halt(HaltReason::OpcodeNotFound.into())
             }
         }
     }
@@ -399,43 +392,39 @@ mod tests {
     use crate::InstructionResult;
 
     #[test]
-    fn all_results_are_covered() {
-        match InstructionResult::Continue {
+    fn exhaustiveness() {
+        match InstructionResult::Stop {
             return_error!() => {}
             return_revert!() => {}
             return_ok!() => {}
-            InstructionResult::CallOrCreate => {}
         }
     }
 
     #[test]
     fn test_results() {
-        let ok_results = vec![
-            InstructionResult::Continue,
+        let ok_results = [
             InstructionResult::Stop,
             InstructionResult::Return,
             InstructionResult::SelfDestruct,
         ];
-
         for result in ok_results {
             assert!(result.is_ok());
             assert!(!result.is_revert());
-            assert!(!result.is_error());
+            assert!(!result.is_halt());
         }
 
-        let revert_results = vec![
+        let revert_results = [
             InstructionResult::Revert,
             InstructionResult::CallTooDeep,
             InstructionResult::OutOfFunds,
         ];
-
         for result in revert_results {
             assert!(!result.is_ok());
             assert!(result.is_revert());
-            assert!(!result.is_error());
+            assert!(!result.is_halt());
         }
 
-        let error_results = vec![
+        let error_results = [
             InstructionResult::OutOfGas,
             InstructionResult::MemoryOOG,
             InstructionResult::MemoryLimitOOG,
@@ -459,11 +448,10 @@ mod tests {
             InstructionResult::CreateInitCodeSizeLimit,
             InstructionResult::FatalExternalError,
         ];
-
         for result in error_results {
             assert!(!result.is_ok());
             assert!(!result.is_revert());
-            assert!(result.is_error());
+            assert!(result.is_halt());
         }
     }
 }

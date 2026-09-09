@@ -10,30 +10,41 @@ extern crate alloc as std;
 #[macro_use]
 mod macros;
 
+/// Gas calculation utilities and constants.
 pub mod gas;
-pub mod host;
+/// Context passed to instruction implementations.
+pub mod instruction_context;
+/// Instruction execution results and success/error types.
 mod instruction_result;
+/// EVM instruction implementations organized by category.
 pub mod instructions;
+/// Core interpreter implementation for EVM bytecode execution.
 pub mod interpreter;
+/// Types for interpreter actions like calls and contract creation.
 pub mod interpreter_action;
+/// Type traits and definitions for interpreter customization.
 pub mod interpreter_types;
+
+pub use bytecode;
+pub use context_interface;
+pub use primitives;
+pub use state;
 
 // Reexport primary types.
 pub use context_interface::{
+    cfg::gas::InitialAndFloorGas,
     context::{SStoreResult, SelfDestructResult, StateLoad},
-    CreateScheme,
+    host, CreateScheme, Host,
 };
-pub use gas::{Gas, InitialAndFloorGas};
-pub use host::Host;
+pub use gas::{Gas, GasTracker};
+pub use instruction_context::InstructionContext;
 pub use instruction_result::*;
-pub use instructions::{instruction_table, Instruction, InstructionTable};
+pub use instructions::{gas_table, instruction_table, GasTable, Instruction, InstructionTable};
 pub use interpreter::{
-    num_words, InputsImpl, Interpreter, InterpreterResult, MemoryGetter, SharedMemory, Stack,
-    EMPTY_SHARED_MEMORY, STACK_LIMIT,
+    num_words, InputsImpl, Interpreter, InterpreterResult, SharedMemory, Stack, STACK_LIMIT,
 };
 pub use interpreter_action::{
-    CallInputs, CallOutcome, CallScheme, CallValue, CreateInputs, CreateOutcome, EOFCreateInputs,
-    EOFCreateKind, FrameInput, InterpreterAction,
+    CallInput, CallInputs, CallOutcome, CallScheme, CallValue, CreateInputs, CreateOutcome,
+    FrameInput, InterpreterAction,
 };
 pub use interpreter_types::InterpreterTypes;
-pub use primitives::{constants::MAX_INITCODE_SIZE, eip170::MAX_CODE_SIZE};

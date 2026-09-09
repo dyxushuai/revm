@@ -2,11 +2,12 @@
 use interpreter::{CallOutcome, CreateOutcome, Gas};
 
 /// Helper that keeps track of gas.
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct GasInspector {
     gas_remaining: u64,
     last_gas_cost: u64,
+    state_gas_spent: i64,
+    reservoir: u64,
 }
 
 impl Default for GasInspector {
@@ -18,60 +19,88 @@ impl Default for GasInspector {
 impl GasInspector {
     /// Returns the remaining gas.
     #[inline]
-    pub fn gas_remaining(&self) -> u64 {
+    pub const fn gas_remaining(&self) -> u64 {
         self.gas_remaining
     }
 
     /// Returns the last gas cost.
     #[inline]
-    pub fn last_gas_cost(&self) -> u64 {
+    pub const fn last_gas_cost(&self) -> u64 {
         self.last_gas_cost
     }
 
+    /// Returns the state gas spent.
+    ///
+    /// Can be negative within a call frame (EIP-8037 issue #2): a child that
+    /// restores a slot set by its parent via 0→x→0 goes negative until the
+    /// frame returns and the parent's charge is reconciled.
+    #[inline]
+    pub const fn state_gas_spent(&self) -> i64 {
+        self.state_gas_spent
+    }
+
+    /// Returns the reservoir gas.
+    #[inline]
+    pub const fn reservoir(&self) -> u64 {
+        self.reservoir
+    }
+
     /// Create a new gas inspector.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             gas_remaining: 0,
             last_gas_cost: 0,
+            state_gas_spent: 0,
+            reservoir: 0,
         }
     }
 
     /// Sets remaining gas to gas limit.
     #[inline]
-    pub fn initialize_interp(&mut self, gas: &Gas) {
+    pub const fn initialize_interp(&mut self, gas: &Gas) {
         self.gas_remaining = gas.limit();
+        self.state_gas_spent = gas.state_gas_spent();
+        self.reservoir = gas.reservoir();
     }
 
     /// Sets the remaining gas.
     #[inline]
-    pub fn step(&mut self, gas: &Gas) {
+    pub const fn step(&mut self, gas: &Gas) {
         self.gas_remaining = gas.remaining();
+        self.state_gas_spent = gas.state_gas_spent();
+        self.reservoir = gas.reservoir();
     }
 
     /// calculate last gas cost and remaining gas.
     #[inline]
-    pub fn step_end(&mut self, gas: &mut Gas) {
+    pub const fn step_end(&mut self, gas: &Gas) {
         let remaining = gas.remaining();
         self.last_gas_cost = self.gas_remaining.saturating_sub(remaining);
         self.gas_remaining = remaining;
+        self.state_gas_spent = gas.state_gas_spent();
+        self.reservoir = gas.reservoir();
     }
 
     /// Spend all gas if call failed.
     #[inline]
-    pub fn call_end(&mut self, outcome: &mut CallOutcome) {
-        if outcome.result.result.is_error() {
+    pub const fn call_end(&mut self, outcome: &mut CallOutcome) {
+        if outcome.result.result.is_halt() {
             outcome.result.gas.spend_all();
             self.gas_remaining = 0;
         }
+        self.state_gas_spent = outcome.result.gas.state_gas_spent();
+        self.reservoir = outcome.result.gas.reservoir();
     }
 
     /// Spend all gas if create failed.
     #[inline]
-    pub fn create_end(&mut self, outcome: &mut CreateOutcome) {
-        if outcome.result.result.is_error() {
+    pub const fn create_end(&mut self, outcome: &mut CreateOutcome) {
+        if outcome.result.result.is_halt() {
             outcome.result.gas.spend_all();
             self.gas_remaining = 0;
         }
+        self.state_gas_spent = outcome.result.gas.state_gas_spent();
+        self.reservoir = outcome.result.gas.reservoir();
     }
 }
 
@@ -79,35 +108,37 @@ impl GasInspector {
 mod tests {
     use super::*;
     use crate::{InspectEvm, Inspector};
-    use context::Context;
+    use context::{CfgEnv, Context, TxEnv};
     use database::{BenchmarkDB, BENCH_CALLER, BENCH_TARGET};
     use handler::{MainBuilder, MainContext};
     use interpreter::{
-        interpreter_types::{Jumps, LoopControl},
-        CallInputs, CreateInputs, Interpreter, InterpreterTypes,
+        interpreter_types::{Jumps, ReturnData},
+        CallInputs, CreateInputs, Interpreter, InterpreterResult, InterpreterTypes,
     };
-    use primitives::{Bytes, TxKind};
+    use primitives::{hardfork::SpecId, Address, Bytes, TxKind};
     use state::bytecode::{opcode, Bytecode};
 
     #[derive(Default, Debug)]
     struct StackInspector {
         pc: usize,
+        opcode: u8,
         gas_inspector: GasInspector,
         gas_remaining_steps: Vec<(usize, u64)>,
     }
 
     impl<CTX, INTR: InterpreterTypes> Inspector<CTX, INTR> for StackInspector {
         fn initialize_interp(&mut self, interp: &mut Interpreter<INTR>, _context: &mut CTX) {
-            self.gas_inspector.initialize_interp(interp.control.gas());
+            self.gas_inspector.initialize_interp(&interp.gas);
         }
 
         fn step(&mut self, interp: &mut Interpreter<INTR>, _context: &mut CTX) {
             self.pc = interp.bytecode.pc();
-            self.gas_inspector.step(interp.control.gas());
+            self.opcode = interp.bytecode.opcode();
+            self.gas_inspector.step(&interp.gas);
         }
 
         fn step_end(&mut self, interp: &mut Interpreter<INTR>, _context: &mut CTX) {
-            self.gas_inspector.step_end(interp.control.gas_mut());
+            self.gas_inspector.step_end(&interp.gas);
             self.gas_remaining_steps
                 .push((self.pc, self.gas_inspector.gas_remaining()));
         }
@@ -140,20 +171,22 @@ mod tests {
         ]);
         let bytecode = Bytecode::new_raw(contract_data);
 
-        let ctx = Context::mainnet()
-            .with_db(BenchmarkDB::new_bytecode(bytecode.clone()))
-            .modify_tx_chained(|tx| {
-                tx.caller = BENCH_CALLER;
-                tx.kind = TxKind::Call(BENCH_TARGET);
-                tx.gas_limit = 21100;
-            });
+        let ctx = Context::mainnet().with_db(BenchmarkDB::new_bytecode(bytecode.clone()));
 
         let mut evm = ctx.build_mainnet_with_inspector(StackInspector::default());
 
         // Run evm.
-        evm.inspect_replay().unwrap();
+        evm.inspect_one_tx(
+            TxEnv::builder()
+                .caller(BENCH_CALLER)
+                .kind(TxKind::Call(BENCH_TARGET))
+                .gas_limit(21100)
+                .build()
+                .unwrap(),
+        )
+        .unwrap();
 
-        let inspector = &evm.data.inspector;
+        let inspector = &evm.inspector;
 
         // Starting from 100gas
         let steps = vec![
@@ -170,5 +203,97 @@ mod tests {
         ];
 
         assert_eq!(inspector.gas_remaining_steps, steps);
+    }
+
+    #[derive(Default, Debug)]
+    struct CallOverrideInspector {
+        call_override: Vec<Option<CallOutcome>>,
+        create_override: Vec<Option<CreateOutcome>>,
+        return_buffer: Vec<Bytes>,
+    }
+
+    impl<CTX, INTR: InterpreterTypes> Inspector<CTX, INTR> for CallOverrideInspector {
+        fn call(&mut self, _context: &mut CTX, _inputs: &mut CallInputs) -> Option<CallOutcome> {
+            self.call_override.pop().unwrap_or_default()
+        }
+
+        fn step(&mut self, interpreter: &mut Interpreter<INTR>, _context: &mut CTX) {
+            let this_buffer = interpreter.return_data.buffer();
+            let Some(buffer) = self.return_buffer.last() else {
+                self.return_buffer.push(this_buffer.clone());
+                return;
+            };
+            if this_buffer != buffer {
+                self.return_buffer.push(this_buffer.clone());
+            }
+        }
+
+        fn create(
+            &mut self,
+            _context: &mut CTX,
+            _inputs: &mut CreateInputs,
+        ) -> Option<CreateOutcome> {
+            self.create_override.pop().unwrap_or_default()
+        }
+    }
+
+    #[test]
+    fn test_call_override_inspector() {
+        use interpreter::{CallOutcome, CreateOutcome, InstructionResult};
+
+        let mut inspector = CallOverrideInspector::default();
+        inspector.call_override.push(Some(CallOutcome::new(
+            InterpreterResult::new(InstructionResult::Return, [0x01].into(), Gas::new(100_000)),
+            0..1,
+        )));
+        inspector.call_override.push(None);
+        inspector.create_override.push(Some(CreateOutcome::new(
+            InterpreterResult::new(InstructionResult::Revert, [0x02].into(), Gas::new(100_000)),
+            Some(Address::ZERO),
+        )));
+
+        let contract_data: Bytes = Bytes::from(vec![
+            opcode::PUSH1,
+            0x01,
+            opcode::PUSH1,
+            0x0,
+            opcode::DUP1,
+            opcode::DUP1,
+            opcode::DUP1,
+            opcode::DUP1,
+            opcode::ADDRESS,
+            opcode::CALL,
+            opcode::PUSH1,
+            0x01,
+            opcode::PUSH1,
+            0x0,
+            opcode::DUP1,
+            opcode::DUP1,
+            opcode::DUP1,
+            opcode::DUP1,
+            opcode::DUP1,
+            opcode::ADDRESS,
+            opcode::CREATE,
+            opcode::STOP,
+        ]);
+
+        let bytecode = Bytecode::new_raw(contract_data);
+
+        let mut cfg = CfgEnv::<SpecId>::default();
+        cfg.tx_gas_limit_cap = Some(u64::MAX);
+
+        let mut evm = Context::mainnet()
+            .with_db(BenchmarkDB::new_bytecode(bytecode.clone()))
+            .with_cfg(cfg)
+            .build_mainnet_with_inspector(inspector);
+
+        let _ = evm
+            .inspect_one_tx(TxEnv::builder_for_bench().build().unwrap())
+            .unwrap();
+        assert_eq!(evm.inspector.return_buffer.len(), 3);
+        assert_eq!(
+            evm.inspector.return_buffer,
+            [Bytes::new(), Bytes::from([0x01]), Bytes::from([0x02])].to_vec()
+        );
     }
 }

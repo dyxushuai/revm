@@ -1,191 +1,221 @@
 use crate::{
-    gas,
-    instructions::utility::cast_slice_to_u256,
-    interpreter::Interpreter,
-    interpreter_types::{Immediates, InterpreterTypes, Jumps, LoopControl, RuntimeFlag, StackTr},
-    Host,
+    interpreter_types::{Immediates, InterpreterTypes as ITy, Jumps, RuntimeFlag, StackTr},
+    InstructionContext as Ictx, InstructionExecResult as Result, InstructionResult,
 };
 use primitives::U256;
 
-pub fn pop<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::BASE);
+/// Implements the POP instruction.
+///
+/// Removes the top item from the stack.
+pub fn pop<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
     // Can ignore return. as relative N jump is safe operation.
-    popn!([_i], interpreter);
+    popn!([_i], context.interpreter);
+    Ok(())
 }
 
 /// EIP-3855: PUSH0 instruction
 ///
 /// Introduce a new instruction which pushes the constant value 0 onto the stack.
-pub fn push0<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    check!(interpreter, SHANGHAI);
-    gas!(interpreter, gas::BASE);
-    push!(interpreter, U256::ZERO);
+pub fn push0<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    check!(context.interpreter, SHANGHAI);
+    push!(context.interpreter, U256::ZERO);
+    Ok(())
 }
 
-pub fn push<const N: usize, WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::VERYLOW);
-    push!(interpreter, U256::ZERO);
-    popn_top!([], top, interpreter);
-
-    let imm = interpreter.bytecode.read_slice(N);
-    cast_slice_to_u256(imm, top);
-
-    // Can ignore return. as relative N jump is safe operation
-    interpreter.bytecode.relative_jump(N as isize);
-}
-
-pub fn dup<const N: usize, WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::VERYLOW);
-    if !interpreter.stack.dup(N) {
-        interpreter
-            .control
-            .set_instruction_result(crate::InstructionResult::StackOverflow);
+/// Implements the PUSH1-PUSH32 instructions.
+///
+/// Pushes N bytes from bytecode onto the stack as a 32-byte value.
+pub fn push<const N: usize, IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    let slice = context.interpreter.bytecode.read_slice(N);
+    if !context.interpreter.stack.push_slice(slice) {
+        return Err(InstructionResult::StackOverflow);
     }
+
+    context.interpreter.bytecode.relative_jump(N as isize);
+    Ok(())
 }
 
-pub fn swap<const N: usize, WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::VERYLOW);
+/// Implements the DUP1-DUP16 instructions.
+///
+/// Duplicates the Nth stack item to the top of the stack.
+pub fn dup<const N: usize, IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    if !context.interpreter.stack.dup(N) {
+        return Err(InstructionResult::StackOverflow);
+    }
+    Ok(())
+}
+
+/// Implements the SWAP1-SWAP16 instructions.
+///
+/// Swaps the top stack item with the Nth stack item.
+pub fn swap<const N: usize, IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
     assert!(N != 0);
-    if !interpreter.stack.exchange(0, N) {
-        interpreter
-            .control
-            .set_instruction_result(crate::InstructionResult::StackOverflow);
+    if !context.interpreter.stack.exchange(0, N) {
+        return Err(InstructionResult::StackUnderflow);
+    }
+    Ok(())
+}
+
+/// Implements the DUPN instruction.
+///
+/// Duplicates the Nth stack item to the top of the stack, with N given by an immediate.
+pub fn dupn<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    check!(context.interpreter, AMSTERDAM);
+    let x: usize = context.interpreter.bytecode.read_u8().into();
+    if let Some(n) = decode_single(x) {
+        if !context.interpreter.stack.dup(n) {
+            return Err(InstructionResult::StackOverflow);
+        }
+        context.interpreter.bytecode.relative_jump(1);
+    } else {
+        return Err(InstructionResult::InvalidImmediateEncoding);
+    }
+    Ok(())
+}
+
+/// Implements the SWAPN instruction.
+///
+/// Swaps the top stack item with the N+1th stack item, with N given by an immediate.
+pub fn swapn<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    check!(context.interpreter, AMSTERDAM);
+    let x: usize = context.interpreter.bytecode.read_u8().into();
+    if let Some(n) = decode_single(x) {
+        if !context.interpreter.stack.exchange(0, n) {
+            return Err(InstructionResult::StackUnderflow);
+        }
+        context.interpreter.bytecode.relative_jump(1);
+    } else {
+        return Err(InstructionResult::InvalidImmediateEncoding);
+    }
+    Ok(())
+}
+
+/// Implements the EXCHANGE instruction.
+///
+/// Swaps the N+1th stack item with the M+1th stack item, with N, M given by an immediate.
+pub fn exchange<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    check!(context.interpreter, AMSTERDAM);
+    let x: usize = context.interpreter.bytecode.read_u8().into();
+    if let Some((n, m)) = decode_pair(x) {
+        if !context.interpreter.stack.exchange(n, m - n) {
+            return Err(InstructionResult::StackUnderflow);
+        }
+        context.interpreter.bytecode.relative_jump(1);
+    } else {
+        return Err(InstructionResult::InvalidImmediateEncoding);
+    }
+    Ok(())
+}
+
+const fn decode_single(x: usize) -> Option<usize> {
+    if x <= 90 || x >= 128 {
+        Some((x + 145) % 256)
+    } else {
+        None
     }
 }
 
-pub fn dupn<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    require_eof!(interpreter);
-    gas!(interpreter, gas::VERYLOW);
-    let imm = interpreter.bytecode.read_u8();
-    if !interpreter.stack.dup(imm as usize + 1) {
-        interpreter
-            .control
-            .set_instruction_result(crate::InstructionResult::StackOverflow);
+const fn decode_pair(x: usize) -> Option<(usize, usize)> {
+    if x > 81 && x < 128 {
+        return None;
     }
-    interpreter.bytecode.relative_jump(1);
-}
-
-pub fn swapn<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    require_eof!(interpreter);
-    gas!(interpreter, gas::VERYLOW);
-    let imm = interpreter.bytecode.read_u8();
-    if !interpreter.stack.exchange(0, imm as usize + 1) {
-        interpreter
-            .control
-            .set_instruction_result(crate::InstructionResult::StackOverflow);
+    let k = x ^ 143;
+    let q = k / 16;
+    let r = k % 16;
+    if q < r {
+        Some((q + 1, r + 1))
+    } else {
+        Some((r + 1, 29 - q))
     }
-    interpreter.bytecode.relative_jump(1);
-}
-
-pub fn exchange<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    require_eof!(interpreter);
-    gas!(interpreter, gas::VERYLOW);
-    let imm = interpreter.bytecode.read_u8();
-    let n = (imm >> 4) + 1;
-    let m = (imm & 0x0F) + 1;
-    if !interpreter.stack.exchange(n as usize, m as usize) {
-        interpreter
-            .control
-            .set_instruction_result(crate::InstructionResult::StackOverflow);
-    }
-    interpreter.bytecode.relative_jump(1);
 }
 
 #[cfg(test)]
-mod test {
-
-    use super::*;
-    use crate::{host::DummyHost, instruction_table, InstructionResult};
-    use bytecode::opcode::{DUPN, EXCHANGE, STOP, SWAPN};
+mod tests {
+    use crate::{
+        host::DummyHost,
+        instructions::{gas_table, instruction_table},
+        interpreter::{EthInterpreter, ExtBytecode, InputsImpl, SharedMemory},
+        interpreter_types::LoopControl,
+        Interpreter,
+    };
+    use bytecode::opcode::*;
     use bytecode::Bytecode;
-    use primitives::{Bytes, U256};
+    use primitives::{hardfork::SpecId, Bytes, U256};
 
-    #[test]
-    fn dupn() {
-        let bytecode = Bytecode::new_raw(Bytes::from(&[DUPN, 0x00, DUPN, 0x01, DUPN, 0x02, STOP]));
-        let mut interpreter = Interpreter::default().with_bytecode(bytecode);
-
-        let table = instruction_table();
-        let mut host = DummyHost;
-
-        interpreter.runtime_flag.is_eof = true;
-        let _ = interpreter.stack.push(U256::from(10));
-        let _ = interpreter.stack.push(U256::from(20));
-        interpreter.step(&table, &mut host);
-        assert_eq!(interpreter.stack.pop(), Ok(U256::from(20)));
-        interpreter.step(&table, &mut host);
-        assert_eq!(interpreter.stack.pop(), Ok(U256::from(10)));
-        interpreter.step(&table, &mut host);
-        assert_eq!(
-            interpreter.control.instruction_result,
-            InstructionResult::StackOverflow
+    fn run_bytecode(code: &[u8]) -> Interpreter {
+        let bytecode = Bytecode::new_raw(Bytes::copy_from_slice(code));
+        let mut interpreter = Interpreter::<EthInterpreter>::new(
+            SharedMemory::new(),
+            ExtBytecode::new(bytecode),
+            InputsImpl::default(),
+            false,
+            SpecId::AMSTERDAM,
+            u64::MAX,
         );
+        let table = instruction_table::<EthInterpreter, DummyHost>();
+        let gas = gas_table();
+        let mut host = DummyHost::new(SpecId::AMSTERDAM);
+        interpreter.run_plain(&table, &gas, &mut host);
+        interpreter
     }
 
     #[test]
-    fn swapn() {
-        let bytecode = Bytecode::new_raw(Bytes::from(&[SWAPN, 0x00, SWAPN, 0x01, STOP]));
-        let mut interpreter = Interpreter::default().with_bytecode(bytecode);
-
-        let table = instruction_table();
-        let mut host = DummyHost;
-        interpreter.runtime_flag.is_eof = true;
-
-        let _ = interpreter.stack.push(U256::from(10));
-        let _ = interpreter.stack.push(U256::from(20));
-        let _ = interpreter.stack.push(U256::from(0));
-        interpreter.step(&table, &mut host);
-        assert_eq!(interpreter.stack.peek(0), Ok(U256::from(20)));
-        assert_eq!(interpreter.stack.peek(1), Ok(U256::from(0)));
-        interpreter.step(&table, &mut host);
-        assert_eq!(interpreter.stack.peek(0), Ok(U256::from(10)));
-        assert_eq!(interpreter.stack.peek(2), Ok(U256::from(20)));
+    fn test_dupn() {
+        let interpreter = run_bytecode(&[
+            PUSH1, 0x01, PUSH1, 0x00, DUP1, DUP1, DUP1, DUP1, DUP1, DUP1, DUP1, DUP1, DUP1, DUP1,
+            DUP1, DUP1, DUP1, DUP1, DUP1, DUPN, 0x80,
+        ]);
+        assert_eq!(interpreter.stack.len(), 18);
+        assert_eq!(interpreter.stack.data()[17], U256::from(1));
+        assert_eq!(interpreter.stack.data()[0], U256::from(1));
+        for i in 1..17 {
+            assert_eq!(interpreter.stack.data()[i], U256::ZERO);
+        }
     }
 
     #[test]
-    fn exchange() {
-        let bytecode = Bytecode::new_raw(Bytes::from(&[EXCHANGE, 0x00, EXCHANGE, 0x11, STOP]));
-        let mut interpreter = Interpreter::default().with_bytecode(bytecode);
+    fn test_swapn() {
+        let interpreter = run_bytecode(&[
+            PUSH1, 0x01, PUSH1, 0x00, DUP1, DUP1, DUP1, DUP1, DUP1, DUP1, DUP1, DUP1, DUP1, DUP1,
+            DUP1, DUP1, DUP1, DUP1, DUP1, PUSH1, 0x02, SWAPN, 0x80,
+        ]);
+        assert_eq!(interpreter.stack.len(), 18);
+        assert_eq!(interpreter.stack.data()[17], U256::from(1));
+        assert_eq!(interpreter.stack.data()[0], U256::from(2));
+        for i in 1..17 {
+            assert_eq!(interpreter.stack.data()[i], U256::ZERO);
+        }
+    }
 
-        let table = instruction_table();
-        let mut host = DummyHost;
-        interpreter.runtime_flag.is_eof = true;
+    #[test]
+    fn test_exchange() {
+        let interpreter = run_bytecode(&[PUSH1, 0x00, PUSH1, 0x01, PUSH1, 0x02, EXCHANGE, 0x8E]);
+        assert_eq!(interpreter.stack.len(), 3);
+        assert_eq!(interpreter.stack.data()[2], U256::from(2));
+        assert_eq!(interpreter.stack.data()[1], U256::from(0));
+        assert_eq!(interpreter.stack.data()[0], U256::from(1));
+    }
 
-        let _ = interpreter.stack.push(U256::from(1));
-        let _ = interpreter.stack.push(U256::from(5));
-        let _ = interpreter.stack.push(U256::from(10));
-        let _ = interpreter.stack.push(U256::from(15));
-        let _ = interpreter.stack.push(U256::from(0));
+    #[test]
+    fn test_swapn_invalid_immediate() {
+        let mut interpreter = run_bytecode(&[SWAPN, JUMPDEST]);
+        assert!(interpreter.bytecode.instruction_result().is_none());
+    }
 
-        interpreter.step(&table, &mut host);
-        assert_eq!(interpreter.stack.peek(1), Ok(U256::from(10)));
-        assert_eq!(interpreter.stack.peek(2), Ok(U256::from(15)));
-        interpreter.step(&table, &mut host);
-        assert_eq!(interpreter.stack.peek(2), Ok(U256::from(1)));
-        assert_eq!(interpreter.stack.peek(4), Ok(U256::from(15)));
+    #[test]
+    fn test_jump_over_invalid_dupn() {
+        let interpreter = run_bytecode(&[PUSH1, 0x04, JUMP, DUPN, JUMPDEST]);
+        assert!(interpreter.bytecode.is_not_end());
+    }
+
+    #[test]
+    fn test_exchange_with_iszero() {
+        let interpreter = run_bytecode(&[
+            PUSH1, 0x00, PUSH1, 0x00, PUSH1, 0x00, EXCHANGE, 0x8E, ISZERO,
+        ]);
+        assert_eq!(interpreter.stack.len(), 3);
+        assert_eq!(interpreter.stack.data()[2], U256::from(1));
+        assert_eq!(interpreter.stack.data()[1], U256::ZERO);
+        assert_eq!(interpreter.stack.data()[0], U256::ZERO);
     }
 }

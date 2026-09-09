@@ -1,10 +1,384 @@
 # Changelog
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [43.0.2](https://github.com/bluealloy/revm/compare/revme-v43.0.0...revme-v43.0.2) - 2026-09-08
+
+### Fixed
+
+- *(revme)* lower evmrunner default gas_limit to 2^24 ([#3886](https://github.com/bluealloy/revm/pull/3886))
+
+## [43.0.0](https://github.com/bluealloy/revm/compare/revme-v42.0.1...revme-v43.0.0) - 2026-08-20
+
+### Added
+
+- *(revme)* validate receipt trie root in blockchain tests ([#3841](https://github.com/bluealloy/revm/pull/3841))
+
+## [42.0.1](https://github.com/bluealloy/revm/compare/revme-v42.0.0...revme-v42.0.1) - 2026-07-23
+
+### Other
+
+- updated the following local packages: revm
+
+## [41.1.0](https://github.com/bluealloy/revm/compare/revme-v41.0.0...revme-v41.1.0) - 2026-07-22
+
+### Added
+
+- *(amsterdam)* glamsterdam devnet-7 alignment (EIP-2780 runtime gas phase, fixtures v7.0.0) ([#3795](https://github.com/bluealloy/revm/pull/3795))
+- *(amsterdam)* glam devnet-6 gas accounting & EIP alignment ([#3782](https://github.com/bluealloy/revm/pull/3782))
+
+### Other
+
+- *(revme)* separate bytecode from account in test state ([#3803](https://github.com/bluealloy/revm/pull/3803))
+
+## [41.0.0](https://github.com/bluealloy/revm/compare/revme-v17.0.3...revme-v41.0.0) - 2026-06-11
+
+### Other
+
+- updated the following local packages: revm
+
+## [17.0.3](https://github.com/bluealloy/revm/compare/revme-v17.0.2...revme-v17.0.3) - 2026-05-26
+
+### Other
+
+- updated the following local packages: revm
+
+## [17.0.2](https://github.com/bluealloy/revm/compare/revme-v17.0.1...revme-v17.0.2) - 2026-05-22
+
+### Other
+
+- updated the following local packages: revm
+
+## [17.0.1](https://github.com/bluealloy/revm/compare/revme-v17.0.0...revme-v17.0.1) - 2026-05-21
+
+### Other
+
+- updated the following local packages: revm
+
+## [17.0.0](https://github.com/bluealloy/revm/compare/revme-v15.0.0...revme-v17.0.0) - 2026-05-19
+
+### Other
+
+- remove unused spec ids ([#3649](https://github.com/bluealloy/revm/pull/3649))
+- reject nonce-max senders before execution ([#3531](https://github.com/bluealloy/revm/pull/3531))
+- audit #[allow] attributes ([#3611](https://github.com/bluealloy/revm/pull/3611))
+
+## [15.0.0](https://github.com/bluealloy/revm/compare/revme-v14.0.0...revme-v15.0.0) - 2026-04-17
+
+### Other
+
+- updated the following local packages: revm
+
+## [14.0.0](https://github.com/bluealloy/revm/compare/revme-v13.0.0...revme-v14.0.0) - 2026-04-10
+
+### Added
+
+- add EIP-8037 / TIP-1016 state gas support ([#3406](https://github.com/bluealloy/revm/pull/3406))
+- *(revme)* list all failed tests at the end with --keep-going ([#3491](https://github.com/bluealloy/revm/pull/3491))
+
+### Fixed
+
+- *(revme)* use transact state for debug "State after" output ([#3498](https://github.com/bluealloy/revm/pull/3498))
+- *(revme)* guard unconditional println in blockchaintest for --json mode ([#3500](https://github.com/bluealloy/revm/pull/3500))
+
+### Other
+
+- *(revme)* use alloy-trie instead of triehash ([#3488](https://github.com/bluealloy/revm/pull/3488))
+
+## [13.0.0](https://github.com/bluealloy/revm/compare/revme-v12.0.0...revme-v13.0.0) - 2026-03-04
+
+### Other
+
+- bump revm-database-interface to v10.0.0
+
+## [12.0.0](https://github.com/bluealloy/revm/compare/revme-v11.0.0...revme-v12.0.0) - 2026-03-02
+
+### Added
+
+- *(precompile)* add aws-lc-rs as alternative backend for secp256r1 ([#3451](https://github.com/bluealloy/revm/pull/3451))
+- *(revme)* add --json output flag to evmrunner command ([#3428](https://github.com/bluealloy/revm/pull/3428))
+- *(revme)* validate block gas used in blockchain tests ([#3416](https://github.com/bluealloy/revm/pull/3416))
+- *(revme)* add --omit-progress flag to statetest command ([#3419](https://github.com/bluealloy/revm/pull/3419))
+
+### Other
+
+- move EIP-161 state clear into journal finalize ([#3444](https://github.com/bluealloy/revm/pull/3444))
+- add subcall benchmarks (1000-call variants) ([#3427](https://github.com/bluealloy/revm/pull/3427))
+- use fixed bytes hashmaps from alloy-core ([#3358](https://github.com/bluealloy/revm/pull/3358))
+- update default hardfork to Osaka (Ethereum) and Jovian (Optimism) ([#3326](https://github.com/bluealloy/revm/pull/3326))
+
+## [11.0.0](https://github.com/bluealloy/revm/compare/revme-v10.0.2...revme-v11.0.0) - 2026-01-15
+
+### Added
+
+- move GasParams to Cfg ([#3229](https://github.com/bluealloy/revm/pull/3229))
+- Propagate `map-foldhash` Feature Through Dependency Chain ([#3252](https://github.com/bluealloy/revm/pull/3252))
+- BAL EIP-7928 ([#3070](https://github.com/bluealloy/revm/pull/3070))
+- DatabaseCommitExt + increment_balances ([#3195](https://github.com/bluealloy/revm/pull/3195))
+- sort accounts by address in blockchaintest output ([#3182](https://github.com/bluealloy/revm/pull/3182))
+
+### Fixed
+
+- incorrect bytecode value in blockchain test error output ([#3288](https://github.com/bluealloy/revm/pull/3288))
+- use expected_exception instead of error field for unexpected_success status ([#3244](https://github.com/bluealloy/revm/pull/3244))
+- deduplicate post-state validation error handling ([#3228](https://github.com/bluealloy/revm/pull/3228))
+- *(revme)* incorrect debug log message in btest ([#3233](https://github.com/bluealloy/revm/pull/3233))
+- *(statetest)* use spec-aware blob base fee update fraction ([#3210](https://github.com/bluealloy/revm/pull/3210))
+
+### Other
+
+- apply improvements from ai-bot labeled PRs ([#3297](https://github.com/bluealloy/revm/pull/3297))
+- *(revme)* consolidate find_all_json_tests into dir_utils ([#3262](https://github.com/bluealloy/revm/pull/3262))
+- happy new year, 2026 licence ([#3272](https://github.com/bluealloy/revm/pull/3272))
+- *(revme)* use unwrap_or_default for non-UTF8 path safety ([#3259](https://github.com/bluealloy/revm/pull/3259))
+- sort storage keys and test files in blockchaintest output ([#3186](https://github.com/bluealloy/revm/pull/3186))
+- *(revme)* extract JSON printing helper in blockchaintest ([#3257](https://github.com/bluealloy/revm/pull/3257))
+- remove redundant clone calls ([#3258](https://github.com/bluealloy/revm/pull/3258))
+- re-export statetest-types from revm crate behind test-types feature ([#3247](https://github.com/bluealloy/revm/pull/3247))
+- *(fmt)* merge all imports ([#3184](https://github.com/bluealloy/revm/pull/3184))
+
+## [10.0.2](https://github.com/bluealloy/revm/compare/revme-v10.0.0...revme-v10.0.2) - 2025-11-14
+
+### Other
+
+- update Cargo.lock dependencies
+
+## [10.0.0](https://github.com/bluealloy/revm/compare/revme-v9.0.2...revme-v10.0.0) - 2025-11-10
+
+### Other
+
+- updated the following local packages: revm, revm-statetest-types
+
+## [9.0.2](https://github.com/bluealloy/revm/compare/revme-v9.0.1...revme-v9.0.2) - 2025-11-10
+
+### Other
+
+- updated the following local packages: revm, revm-statetest-types
+
+## [9.0.1](https://github.com/bluealloy/revm/compare/revme-v9.0.0...revme-v9.0.1) - 2025-11-07
+
+### Fixed
+
+- *(revme)* use primitive hashmap in statetest ([#3137](https://github.com/bluealloy/revm/pull/3137))
+
+## [9.0.0](https://github.com/bluealloy/revm/compare/revme-v8.3.0...revme-v9.0.0) - 2025-10-30
+
+### Other
+
+- consolidate revme imports ([#3088](https://github.com/bluealloy/revm/pull/3088))
+- Update blockchaintest.rs ([#3107](https://github.com/bluealloy/revm/pull/3107))
+- typo eip4788  ([#3111](https://github.com/bluealloy/revm/pull/3111))
+
+## [8.3.0](https://github.com/bluealloy/revm/compare/revme-v8.2.2...revme-v8.3.0) - 2025-10-17
+
+### Other
+
+- updated the following local packages: revm-inspector, revm, revm-statetest-types
+
+## [8.2.2](https://github.com/bluealloy/revm/compare/revme-v8.2.1...revme-v8.2.2) - 2025-10-15
+
+### Other
+
+- updated the following local packages: revm-bytecode, revm-state, revm-database-interface, revm-context-interface, revm-context, revm-database, revm-inspector, revm, revm-statetest-types
+
+## [8.2.1](https://github.com/bluealloy/revm/compare/revme-v8.2.0...revme-v8.2.1) - 2025-10-15
+
+### Other
+
+- updated the following local packages: revm-primitives, revm-bytecode, revm-context, revm-state, revm-database-interface, revm-context-interface, revm-database, revm-inspector, revm, revm-statetest-types
+
+## [8.2.0](https://github.com/bluealloy/revm/compare/revme-v8.0.1...revme-v8.2.0) - 2025-10-09
+
+## [8.0.1](https://github.com/bluealloy/revm/compare/revme-v8.0.0...revme-v8.0.1) - 2025-10-09
+
+### Other
+
+- use NoOpInspector for inspector benches ([#3060](https://github.com/bluealloy/revm/pull/3060))
+
+## [8.0.0](https://github.com/bluealloy/revm/compare/revme-v7.2.3...revme-v8.0.0) - 2025-10-07
+
+### Added
+
+- *(revme)* ef blockchain tests cli ([#2935](https://github.com/bluealloy/revm/pull/2935))
+
+### Fixed
+
+- *(revme)* Insert block hashes in State ([#3024](https://github.com/bluealloy/revm/pull/3024))
+- support 0x prefix in evmrunner hex input ([#2970](https://github.com/bluealloy/revm/pull/2970))
+- *(revme)* Avoid panic on non-UTF filenames in statetest runner ([#2948](https://github.com/bluealloy/revm/pull/2948))
+
+### Other
+
+- changelog update for v87 ([#3056](https://github.com/bluealloy/revm/pull/3056))
+- pretty print state in revme statetest ([#2979](https://github.com/bluealloy/revm/pull/2979))
+- Fix CLI exit code for invalid bytecode input ([#2968](https://github.com/bluealloy/revm/pull/2968))
+
+## [7.2.3](https://github.com/bluealloy/revm/compare/revme-v7.2.2...revme-v7.2.3) - 2025-09-23
+
+### Other
+
+- updated the following local packages: revm-context-interface, revm-context, revm-inspector, revm, revm-statetest-types
+
+## [7.2.2](https://github.com/bluealloy/revm/compare/revme-v7.2.1...revme-v7.2.2) - 2025-08-23
+
+### Other
+
+- updated the following local packages: revm-bytecode, revm-database-interface, revm-context-interface, revm-context, revm-database, revm-state, revm-inspector, revm, revm-statetest-types
+
+## [7.2.1](https://github.com/bluealloy/revm/compare/revme-v7.2.0...revme-v7.2.1) - 2025-08-12
+
+### Other
+
+- codspeed sstore sload opcodes ([#2881](https://github.com/bluealloy/revm/pull/2881))
+
+## [7.2.0](https://github.com/bluealloy/revm/compare/revme-v7.1.0...revme-v7.2.0) - 2025-08-06
+
+### Added
+
+- Reuse bls12-381 codepaths to implement kzg point evaluation precompile ([#2809](https://github.com/bluealloy/revm/pull/2809))
+
+### Other
+
+- *(benches)* rename anaysis-inspector to snailtracer-inspect ([#2834](https://github.com/bluealloy/revm/pull/2834))
+- *(benches)* clean up criterion callsites ([#2833](https://github.com/bluealloy/revm/pull/2833))
+- add rust-version and note about MSRV ([#2789](https://github.com/bluealloy/revm/pull/2789))
+- fix clippy ([#2785](https://github.com/bluealloy/revm/pull/2785))
+- add gas_limit to revme evm ([#2779](https://github.com/bluealloy/revm/pull/2779))
+# Changelog
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [7.1.0](https://github.com/bluealloy/revm/compare/revme-v7.0.4...revme-v7.1.0) - 2025-07-23
+
+### Added
+
+- count inspector and bench test ([#2730](https://github.com/bluealloy/revm/pull/2730))
+
+### Fixed
+
+- fully deprecate serde-json ([#2767](https://github.com/bluealloy/revm/pull/2767))
+
+### Other
+
+- back to hashbrown map in revme ([#2770](https://github.com/bluealloy/revm/pull/2770))
+- back to better map ([#2768](https://github.com/bluealloy/revm/pull/2768))
+- bump develop statetests to devnet-3 ([#2754](https://github.com/bluealloy/revm/pull/2754))
+- add clz_50 codspeed ([#2743](https://github.com/bluealloy/revm/pull/2743))
+
+## [7.0.4](https://github.com/bluealloy/revm/compare/revme-v7.0.3...revme-v7.0.4) - 2025-07-14
+
+### Other
+
+- incorrect StorageKey and StorageValue parameter order in burntpix benchmark ([#2704](https://github.com/bluealloy/revm/pull/2704))
+
+## [7.0.3](https://github.com/bluealloy/revm/compare/revme-v7.0.2...revme-v7.0.3) - 2025-07-03
+
+### Other
+
+- update Cargo.lock dependencies
+
+## [7.0.2](https://github.com/bluealloy/revm/compare/revme-v7.0.1...revme-v7.0.2) - 2025-06-30
+
+### Other
+
+- cargo clippy --fix --all ([#2671](https://github.com/bluealloy/revm/pull/2671))
+- statetest runner cleanup ([#2665](https://github.com/bluealloy/revm/pull/2665))
+- use TxEnv::builder ([#2652](https://github.com/bluealloy/revm/pull/2652))
+
+## [7.0.1](https://github.com/bluealloy/revm/compare/revme-v7.0.0...revme-v7.0.1) - 2025-06-20
+
+### Other
+
+- updated the following local packages: revm-context-interface, revm-context, revm, revm-inspector, revm-statetest-types
+
+## [7.0.0](https://github.com/bluealloy/revm/compare/revme-v6.0.0...revme-v7.0.0) - 2025-06-19
+
+### Added
+
+- remove EOF ([#2644](https://github.com/bluealloy/revm/pull/2644))
+- *(precompile)* rug/gmp-based modexp ([#2596](https://github.com/bluealloy/revm/pull/2596))
+- change blob_max_count to max_blobs_per_tx ([#2608](https://github.com/bluealloy/revm/pull/2608))
+
+### Other
+
+- re-use frame allocation ([#2636](https://github.com/bluealloy/revm/pull/2636))
+- rename `transact` methods ([#2616](https://github.com/bluealloy/revm/pull/2616))
+
+## [6.0.0](https://github.com/bluealloy/revm/compare/revme-v5.1.1...revme-v6.0.0) - 2025-06-06
+
+### Added
+
+- Config blob basefee fraction ([#2551](https://github.com/bluealloy/revm/pull/2551))
+- expand timestamp/block_number to u256 ([#2546](https://github.com/bluealloy/revm/pull/2546))
+- transact multi tx ([#2517](https://github.com/bluealloy/revm/pull/2517))
+
+### Other
+
+- tag v75 revm v24.0.1 ([#2563](https://github.com/bluealloy/revm/pull/2563)) ([#2589](https://github.com/bluealloy/revm/pull/2589))
+- use iter_batched for revme benches ([#2584](https://github.com/bluealloy/revm/pull/2584))
+- unify calling of journal account loading ([#2561](https://github.com/bluealloy/revm/pull/2561))
+- ContextTr rm *_ref, and add *_mut fn ([#2560](https://github.com/bluealloy/revm/pull/2560))
+- *(cfg)* add tx_chain_id_check fields. Optimize effective gas cost calc ([#2557](https://github.com/bluealloy/revm/pull/2557))
+- add gas-cost-estimator selected bytecodes ([#2555](https://github.com/bluealloy/revm/pull/2555))
+
+## [5.1.1](https://github.com/bluealloy/revm/compare/revme-v5.1.0...revme-v5.1.1) - 2025-05-31
+
+### Other
+
+- unify calling of journal account loading
+
+## [5.1.0](https://github.com/bluealloy/revm/compare/revme-v5.0.0...revme-v5.1.0) - 2025-05-22
+
+### Added
+
+- make blob max number optional ([#2532](https://github.com/bluealloy/revm/pull/2532))
+
+### Other
+
+- Change legacy statetests repo ([#2519](https://github.com/bluealloy/revm/pull/2519))
+- Storage Types Alias ([#2461](https://github.com/bluealloy/revm/pull/2461))
+
+## [5.0.0](https://github.com/bluealloy/revm/compare/revme-v4.1.0...revme-v5.0.0) - 2025-05-07
+
+Dependency bump
+
+## [4.1.0](https://github.com/bluealloy/revm/compare/revme-v4.0.2...revme-v4.1.0) - 2025-05-07
+
+### Added
+
+- *(Osaka)* disable EOF ([#2480](https://github.com/bluealloy/revm/pull/2480))
+- skip cloning of call input from shared memory ([#2462](https://github.com/bluealloy/revm/pull/2462))
+- *(tx)* Add Either RecoveredAuthorization ([#2448](https://github.com/bluealloy/revm/pull/2448))
+- *(EOF)* Changes needed for devnet-1 ([#2377](https://github.com/bluealloy/revm/pull/2377))
+- Move SharedMemory buffer to context ([#2382](https://github.com/bluealloy/revm/pull/2382))
+
+### Fixed
+
+- *(revme)* evm command caller/target for bench ([#2476](https://github.com/bluealloy/revm/pull/2476))
+
+### Other
+
+- *(revme)* simplify repeated code ([#2432](https://github.com/bluealloy/revm/pull/2432))
+- backport from release branch ([#2415](https://github.com/bluealloy/revm/pull/2415)) ([#2416](https://github.com/bluealloy/revm/pull/2416))
+- *(lints)* revm-context lints ([#2404](https://github.com/bluealloy/revm/pull/2404))
+
+## [4.0.2](https://github.com/bluealloy/revm/compare/revme-v4.0.0..revme-v4.0.1) - 2025-04-15
+
+### Other
+
+
+## [4.0.1](https://github.com/bluealloy/revm/compare/revme-v4.0.0...revme-v4.0.1) - 2025-04-09
+
+### Other
+
+- *(revme)* remove revm-handler dependency ([#2366](https://github.com/bluealloy/revm/pull/2366))
 
 ## [4.0.0](https://github.com/bluealloy/revm/compare/revme-v3.0.0...revme-v4.0.0) - 2025-03-28
 

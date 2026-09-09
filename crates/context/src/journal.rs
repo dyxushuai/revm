@@ -1,17 +1,27 @@
-pub mod entry;
+//! This module contains [`Journal`] struct and implements [`JournalTr`] trait for it.
+//!
+//! Entry submodule contains [`JournalEntry`] and [`JournalEntryTr`] traits.
+//! and inner submodule contains [`JournalInner`] struct that contains state.
 pub mod inner;
+pub mod warm_addresses;
 
-pub use entry::{JournalEntry, JournalEntryTr};
-pub use inner::JournalInner;
+pub use context_interface::journaled_state::entry::{JournalEntry, JournalEntryTr};
+pub use inner::{JournalCfg, JournalInner};
 
 use bytecode::Bytecode;
 use context_interface::{
     context::{SStoreResult, SelfDestructResult, StateLoad},
-    journaled_state::{AccountLoad, JournalCheckpoint, JournalTr, TransferError},
+    journaled_state::{
+        account::JournaledAccount, AccountInfoLoad, AccountLoad, JournalCheckpoint,
+        JournalLoadError, JournalTr, TransferError,
+    },
 };
 use core::ops::{Deref, DerefMut};
 use database_interface::Database;
-use primitives::{hardfork::SpecId, Address, HashSet, Log, B256, U256};
+use primitives::{
+    hardfork::SpecId, Address, AddressMap, AddressSet, HashSet, Log, StorageKey, StorageValue,
+    B256, U256,
+};
 use state::{Account, EvmState};
 use std::vec::Vec;
 
@@ -56,7 +66,7 @@ impl<DB, ENTRY: JournalEntryTr> Journal<DB, ENTRY> {
     /// Creates a new JournaledState by copying state data from a JournalInit and provided database.
     /// This allows reusing the state, logs, and other data from a previous execution context while
     /// connecting it to a different database backend.
-    pub fn new_with_inner(database: DB, inner: JournalInner<ENTRY>) -> Self {
+    pub const fn new_with_inner(database: DB, inner: JournalInner<ENTRY>) -> Self {
         Self { database, inner }
     }
 
@@ -80,17 +90,14 @@ impl<DB, ENTRY: JournalEntryTr + Clone> Journal<DB, ENTRY> {
     }
 }
 
-/// Output of the journal after finalizing.
-pub struct JournalOutput {
-    /// Changes or touched accounts that loads, created or changed in the journal.
-    pub state: EvmState,
-    /// Logs that were emitted by contract calls.
-    pub logs: Vec<Log>,
-}
-
 impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
     type Database = DB;
-    type FinalOutput = JournalOutput;
+    type State = EvmState;
+    type JournaledAccount<'a>
+        = JournaledAccount<'a, DB, ENTRY>
+    where
+        ENTRY: 'a,
+        DB: 'a;
 
     fn new(database: DB) -> Journal<DB, ENTRY> {
         Self {
@@ -99,36 +106,41 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
         }
     }
 
-    fn db_ref(&self) -> &Self::Database {
-        &self.database
+    fn db_and_state(&self) -> (&Self::Database, &Self::State) {
+        (&self.database, &self.inner.state)
     }
 
-    fn db(&mut self) -> &mut Self::Database {
-        &mut self.database
+    #[inline]
+    fn db_and_state_mut(&mut self) -> (&mut Self::Database, &mut Self::State) {
+        (&mut self.database, &mut self.inner.state)
     }
 
     fn sload(
         &mut self,
         address: Address,
-        key: U256,
-    ) -> Result<StateLoad<U256>, <Self::Database as Database>::Error> {
-        self.inner.sload(&mut self.database, address, key)
+        key: StorageKey,
+    ) -> Result<StateLoad<StorageValue>, <Self::Database as Database>::Error> {
+        self.inner
+            .sload_assume_account_present(&mut self.database, address, key, false)
+            .map_err(JournalLoadError::unwrap_db_error)
     }
 
     fn sstore(
         &mut self,
         address: Address,
-        key: U256,
-        value: U256,
+        key: StorageKey,
+        value: StorageValue,
     ) -> Result<StateLoad<SStoreResult>, <Self::Database as Database>::Error> {
-        self.inner.sstore(&mut self.database, address, key, value)
+        self.inner
+            .sstore_assume_account_present(&mut self.database, address, key, value, false)
+            .map_err(JournalLoadError::unwrap_db_error)
     }
 
-    fn tload(&mut self, address: Address, key: U256) -> U256 {
+    fn tload(&mut self, address: Address, key: StorageKey) -> StorageValue {
         self.inner.tload(address, key)
     }
 
-    fn tstore(&mut self, address: Address, key: U256, value: U256) {
+    fn tstore(&mut self, address: Address, key: StorageKey, value: StorageValue) {
         self.inner.tstore(address, key, value)
     }
 
@@ -136,26 +148,47 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
         self.inner.log(log)
     }
 
+    #[inline]
+    fn logs(&self) -> &[Log] {
+        &self.inner.logs
+    }
+
+    #[inline]
+    fn take_logs(&mut self) -> Vec<Log> {
+        self.inner.take_logs()
+    }
+
     fn selfdestruct(
         &mut self,
         address: Address,
         target: Address,
-    ) -> Result<StateLoad<SelfDestructResult>, DB::Error> {
-        self.inner.selfdestruct(&mut self.database, address, target)
-    }
-
-    fn warm_account(&mut self, address: Address) {
-        self.inner.warm_preloaded_addresses.insert(address);
-    }
-
-    fn warm_precompiles(&mut self, address: HashSet<Address>) {
-        self.inner.precompiles = address;
-        self.inner.warm_preloaded_addresses = self.inner.precompiles.clone();
+        skip_cold_load: bool,
+    ) -> Result<StateLoad<SelfDestructResult>, JournalLoadError<<Self::Database as Database>::Error>>
+    {
+        self.inner
+            .selfdestruct(&mut self.database, address, target, skip_cold_load)
     }
 
     #[inline]
-    fn precompile_addresses(&self) -> &HashSet<Address> {
-        &self.inner.precompiles
+    fn warm_access_list(&mut self, access_list: AddressMap<HashSet<StorageKey>>) {
+        self.inner.warm_addresses.set_access_list(access_list);
+    }
+
+    #[inline]
+    fn warm_coinbase_account(&mut self, address: Address) {
+        self.inner.warm_addresses.set_coinbase(address);
+    }
+
+    #[inline]
+    fn warm_precompiles(&mut self, precompiles: &AddressSet) {
+        self.inner
+            .warm_addresses
+            .set_precompile_addresses(precompiles);
+    }
+
+    #[inline]
+    fn precompile_addresses(&self) -> &AddressSet {
+        self.inner.warm_addresses.precompiles()
     }
 
     /// Returns call depth.
@@ -165,19 +198,14 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
     }
 
     #[inline]
-    fn warm_account_and_storage(
-        &mut self,
-        address: Address,
-        storage_keys: impl IntoIterator<Item = U256>,
-    ) -> Result<(), <Self::Database as Database>::Error> {
-        self.inner
-            .initial_account_load(&mut self.database, address, storage_keys)?;
-        Ok(())
+    fn set_spec_id(&mut self, spec_id: SpecId) {
+        self.inner.cfg.spec = spec_id;
     }
 
     #[inline]
-    fn set_spec_id(&mut self, spec_id: SpecId) {
-        self.inner.spec = spec_id;
+    fn set_eip7708_config(&mut self, disabled: bool, eip8246_delayed_clear_disabled: bool) {
+        self.inner
+            .set_eip7708_config(disabled, eip8246_delayed_clear_disabled);
     }
 
     #[inline]
@@ -191,25 +219,81 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
     }
 
     #[inline]
+    fn transfer_loaded(
+        &mut self,
+        from: Address,
+        to: Address,
+        balance: U256,
+    ) -> Option<TransferError> {
+        self.inner.transfer_loaded(from, to, balance)
+    }
+
+    #[inline]
     fn touch_account(&mut self, address: Address) {
         self.inner.touch(address);
     }
 
     #[inline]
-    fn inc_account_nonce(&mut self, address: Address) -> Result<Option<u64>, DB::Error> {
-        Ok(self.inner.inc_nonce(address))
+    #[expect(deprecated)]
+    fn caller_accounting_journal_entry(
+        &mut self,
+        address: Address,
+        old_balance: U256,
+        bump_nonce: bool,
+    ) {
+        self.inner
+            .caller_accounting_journal_entry(address, old_balance, bump_nonce);
+    }
+
+    /// Increments the balance of the account.
+    #[inline]
+    fn balance_incr(
+        &mut self,
+        address: Address,
+        balance: U256,
+    ) -> Result<(), <Self::Database as Database>::Error> {
+        self.inner
+            .balance_incr(&mut self.database, address, balance)
+    }
+
+    /// Increments the nonce of the account.
+    #[inline]
+    #[expect(deprecated)]
+    fn nonce_bump_journal_entry(&mut self, address: Address) {
+        self.inner.nonce_bump_journal_entry(address)
     }
 
     #[inline]
-    fn load_account(&mut self, address: Address) -> Result<StateLoad<&mut Account>, DB::Error> {
+    fn load_account(&mut self, address: Address) -> Result<StateLoad<&Account>, DB::Error> {
         self.inner.load_account(&mut self.database, address)
     }
 
     #[inline]
-    fn load_account_code(
+    fn load_account_mut_skip_cold_load(
         &mut self,
         address: Address,
-    ) -> Result<StateLoad<&mut Account>, DB::Error> {
+        skip_cold_load: bool,
+    ) -> Result<StateLoad<Self::JournaledAccount<'_>>, JournalLoadError<DB::Error>> {
+        self.inner
+            .load_account_mut_optional(&mut self.database, address, skip_cold_load)
+    }
+
+    #[inline]
+    fn load_account_mut_optional_code(
+        &mut self,
+        address: Address,
+        load_code: bool,
+    ) -> Result<StateLoad<Self::JournaledAccount<'_>>, DB::Error> {
+        self.inner
+            .load_account_mut_optional_code(&mut self.database, address, load_code, false)
+            .map_err(JournalLoadError::unwrap_db_error)
+    }
+
+    #[inline]
+    fn load_account_with_code(
+        &mut self,
+        address: Address,
+    ) -> Result<StateLoad<&Account>, DB::Error> {
         self.inner.load_code(&mut self.database, address)
     }
 
@@ -243,12 +327,6 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
     }
 
     #[inline]
-    fn clear(&mut self) {
-        // Clears the inner journal state. Preserving only the spec and precompile addresses.
-        let _ = self.inner.clear_and_take_output();
-    }
-
-    #[inline]
     fn create_account_checkpoint(
         &mut self,
         caller: Address,
@@ -262,7 +340,63 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
     }
 
     #[inline]
-    fn finalize(&mut self) -> Self::FinalOutput {
-        self.inner.clear_and_take_output()
+    fn commit_tx(&mut self) {
+        self.inner.commit_tx()
+    }
+
+    #[inline]
+    fn discard_tx(&mut self) {
+        self.inner.discard_tx();
+    }
+
+    /// Clear current journal resetting it to initial state and return changes state.
+    #[inline]
+    fn finalize(&mut self) -> Self::State {
+        self.inner.finalize()
+    }
+
+    #[inline]
+    fn sload_skip_cold_load(
+        &mut self,
+        address: Address,
+        key: StorageKey,
+        skip_cold_load: bool,
+    ) -> Result<StateLoad<StorageValue>, JournalLoadError<<Self::Database as Database>::Error>>
+    {
+        self.inner
+            .sload_assume_account_present(&mut self.database, address, key, skip_cold_load)
+    }
+
+    #[inline]
+    fn sstore_skip_cold_load(
+        &mut self,
+        address: Address,
+        key: StorageKey,
+        value: StorageValue,
+        skip_cold_load: bool,
+    ) -> Result<StateLoad<SStoreResult>, JournalLoadError<<Self::Database as Database>::Error>>
+    {
+        self.inner.sstore_assume_account_present(
+            &mut self.database,
+            address,
+            key,
+            value,
+            skip_cold_load,
+        )
+    }
+
+    #[inline]
+    fn load_account_info_skip_cold_load(
+        &mut self,
+        address: Address,
+        load_code: bool,
+        skip_cold_load: bool,
+    ) -> Result<AccountInfoLoad<'_>, JournalLoadError<<Self::Database as Database>::Error>> {
+        let spec = self.inner.cfg.spec;
+        self.inner
+            .load_account_optional(&mut self.database, address, load_code, skip_cold_load)
+            .map(|a| {
+                AccountInfoLoad::new(&a.data.info, a.is_cold, a.state_clear_aware_is_empty(spec))
+            })
     }
 }

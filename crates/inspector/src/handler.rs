@@ -1,19 +1,24 @@
-use crate::{Inspector, InspectorEvmTr, InspectorFrame, JournalExt};
-use context::{result::ResultAndState, ContextTr, JournalEntry, Transaction};
-use handler::{EvmTr, Frame, FrameInitOrResult, FrameOrResult, FrameResult, Handler, ItemOrResult};
-use interpreter::{
-    instructions::InstructionTable,
-    interpreter_types::{Jumps, LoopControl},
-    FrameInput, Host, InitialAndFloorGas, InstructionResult, Interpreter, InterpreterAction,
-    InterpreterTypes,
+use crate::{Inspector, InspectorEvmTr, JournalExt};
+use context::journaled_state::JournalCheckpoint;
+use context::{result::ExecutionResult, ContextTr, JournalEntry, JournalTr};
+use handler::{
+    evm::FrameTr, execution::runtime_oog_unwind, post_execution::build_result_gas, EvmTr,
+    FrameResult, Handler, ItemOrResult,
 };
-
-use std::{vec, vec::Vec};
+use interpreter::{
+    instructions::{GasTable, InstructionTable},
+    interpreter_types::LoopControl,
+    FrameInput, GasTracker, Host, InitialAndFloorGas, InstructionResult, Interpreter,
+    InterpreterAction, InterpreterTypes,
+};
+use primitives::hints_util::cold_path;
 
 /// Trait that extends [`Handler`] with inspection functionality.
 ///
 /// Similar how [`Handler::run`] method serves as the entry point,
 /// [`InspectorHandler::inspect_run`] method serves as the entry point for inspection.
+/// For system calls, [`InspectorHandler::inspect_run_system_call`] provides inspection
+/// support similar to [`Handler::run_system_call`].
 ///
 /// Notice that when inspection is run it skips few functions from handler, this can be
 /// a problem if custom EVM is implemented and some of skipped functions have changed logic.
@@ -23,15 +28,15 @@ use std::{vec, vec::Vec};
 /// * [`Handler::run`] replaced with [`InspectorHandler::inspect_run`]
 /// * [`Handler::run_without_catch_error`] replaced with [`InspectorHandler::inspect_run_without_catch_error`]
 /// * [`Handler::execution`] replaced with [`InspectorHandler::inspect_execution`]
-/// * [`Handler::first_frame_init`] replaced with [`InspectorHandler::inspect_first_frame_init`]
-/// * [`Handler::frame_call`] replaced with [`InspectorHandler::inspect_frame_call`]
 /// * [`Handler::run_exec_loop`] replaced with [`InspectorHandler::inspect_run_exec_loop`]
+///   * `run_exec_loop` calls `inspect_frame_init` and `inspect_frame_run` that call inspector inside.
+/// * [`Handler::run_system_call`] replaced with [`InspectorHandler::inspect_run_system_call`]
 pub trait InspectorHandler: Handler
 where
     Self::Evm:
         InspectorEvmTr<Inspector: Inspector<<<Self as Handler>::Evm as EvmTr>::Context, Self::IT>>,
-    Self::Frame: InspectorFrame<IT = Self::IT>,
 {
+    /// The interpreter types used by this handler.
     type IT: InterpreterTypes;
 
     /// Entry point for inspection.
@@ -40,7 +45,7 @@ where
     fn inspect_run(
         &mut self,
         evm: &mut Self::Evm,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::HaltReason>, Self::Error> {
         match self.inspect_run_without_catch_error(evm) {
             Ok(output) => Ok(output),
             Err(e) => self.catch_error(evm, e),
@@ -53,11 +58,29 @@ where
     fn inspect_run_without_catch_error(
         &mut self,
         evm: &mut Self::Evm,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::HaltReason>, Self::Error> {
         let init_and_floor_gas = self.validate(evm)?;
-        let eip7702_refund = self.pre_execution(evm)? as i64;
-        let exec_result = self.inspect_execution(evm, &init_and_floor_gas);
-        self.post_execution(evm, exec_result?, init_and_floor_gas, eip7702_refund)
+        // Create the transaction-level gas tracker from the validated
+        // intrinsic gas (mirrors `Handler::run_without_catch_error`).
+        let mut gas = self.tx_gas(evm, &init_and_floor_gas);
+        // Pre-execution returns the EIP-7702 refund and the EIP-2780 runtime
+        // gas phase checkpoint. `None` — from pre-execution or execution —
+        // means the runtime gas phase ran out of gas: the transaction is
+        // included as an out-of-gas halt without entering execution.
+        let pre_execution = self.pre_execution(evm, &mut gas)?;
+
+        let mut refund = 0;
+        let mut exec_result = None;
+        if let Some(pre_execution) = pre_execution {
+            refund = pre_execution.eip7702_refund as i64;
+            exec_result = self.inspect_execution(evm, pre_execution.checkpoint, &mut gas)?;
+        }
+        let mut frame_result = match exec_result {
+            Some(exec_result) => exec_result,
+            None => self.runtime_oog_result(evm, &init_and_floor_gas, &mut gas)?,
+        };
+        let result_gas = self.post_execution(evm, &mut frame_result, init_and_floor_gas, refund)?;
+        self.execution_result(evm, frame_result, result_gas)
     }
 
     /// Run execution loop with inspection support
@@ -66,136 +89,117 @@ where
     fn inspect_execution(
         &mut self,
         evm: &mut Self::Evm,
-        init_and_floor_gas: &InitialAndFloorGas,
-    ) -> Result<FrameResult, Self::Error> {
-        let gas_limit = evm.ctx().tx().gas_limit() - init_and_floor_gas.initial_gas;
-
-        // Create first frame action
-        let first_frame_input = self.first_frame_input(evm, gas_limit)?;
-        let first_frame = self.inspect_first_frame_init(evm, first_frame_input)?;
-
-        let mut frame_result = match first_frame {
-            ItemOrResult::Item(frame) => self.inspect_run_exec_loop(evm, frame)?,
-            ItemOrResult::Result(result) => result,
+        checkpoint: JournalCheckpoint,
+        gas: &mut GasTracker,
+    ) -> Result<Option<FrameResult>, Self::Error> {
+        // Create the first frame action from the transaction-level gas
+        // (mirrors `Handler::execution`).
+        let Some(first_frame_input) = self.first_frame_input(evm, gas)? else {
+            runtime_oog_unwind(evm.ctx(), checkpoint)?;
+            return Ok(None);
         };
+        // The runtime gas phase is complete: commit its state changes.
+        evm.ctx().journal_mut().checkpoint_commit();
 
-        self.last_frame_result(evm, &mut frame_result)?;
-        Ok(frame_result)
+        // Run execution loop
+        let mut frame_result = self.inspect_run_exec_loop(evm, first_frame_input)?;
+
+        // Handle last frame result
+        self.last_frame_result(evm, &mut frame_result, gas)?;
+        Ok(Some(frame_result))
     }
 
     /* FRAMES */
-
-    /// Initialize first frame.
-    ///
-    /// This method replaces the [`Handler::first_frame_init`] method from [`Handler`].
-    ///
-    /// * It calls [`Inspector::call`]/[`Inspector::create`]/[`Inspector::eofcreate`] methods to allow inspection of
-    ///   the frame and its modification.
-    /// * If new frame is created a [`Inspector::initialize_interp`] method will be called.
-    /// * If creation of new frame returns the result, the [`Inspector`] `_end` methods will be called.
-    fn inspect_first_frame_init(
-        &mut self,
-        evm: &mut Self::Evm,
-        mut frame_input: <Self::Frame as Frame>::FrameInit,
-    ) -> Result<FrameOrResult<Self::Frame>, Self::Error> {
-        let (ctx, inspector) = evm.ctx_inspector();
-        if let Some(output) = frame_start(ctx, inspector, &mut frame_input) {
-            return Ok(ItemOrResult::Result(output));
-        }
-        let mut ret = self.first_frame_init(evm, frame_input.clone());
-
-        // only if new frame is created call initialize_interp hook.
-        if let Ok(ItemOrResult::Item(frame)) = &mut ret {
-            let (context, inspector) = evm.ctx_inspector();
-            inspector.initialize_interp(frame.interpreter(), context);
-        } else if let Ok(ItemOrResult::Result(result)) = &mut ret {
-            let (context, inspector) = evm.ctx_inspector();
-            frame_end(context, inspector, &frame_input, result);
-        }
-        ret
-    }
-
-    /// Run inspection on frame.
-    ///
-    /// This method acts as [`Handler::frame_call`] method for inspection.
-    ///
-    /// Internally it will call [`Inspector::step`], [`Inspector::step_end`] for each instruction.
-    /// And [`Inspector::log`],[`Inspector::selfdestruct`] for each log and selfdestruct instruction.
-    #[inline]
-    fn inspect_frame_call(
-        &mut self,
-        frame: &mut Self::Frame,
-        evm: &mut Self::Evm,
-    ) -> Result<FrameInitOrResult<Self::Frame>, Self::Error> {
-        frame.run_inspect(evm)
-    }
 
     /// Run inspection on execution loop.
     ///
     /// This method acts as [`Handler::run_exec_loop`] method for inspection.
     ///
     /// It will call:
-    /// * [`InspectorHandler::inspect_frame_call`] to inspect Interpreter execution loop.
-    /// * [`Inspector::call`],[`Inspector::create`],[`Inspector::eofcreate`] to inspect call, create and eofcreate.
-    /// * [`Inspector::call_end`],[`Inspector::create_end`],[`Inspector::eofcreate_end`] to inspect call, create and eofcreate end.
+    /// * [`Inspector::call`],[`Inspector::create`] to inspect call, create and eofcreate.
+    /// * [`Inspector::call_end`],[`Inspector::create_end`] to inspect call, create and eofcreate end.
     /// * [`Inspector::initialize_interp`] to inspect initialized interpreter.
     fn inspect_run_exec_loop(
         &mut self,
         evm: &mut Self::Evm,
-        frame: Self::Frame,
+        first_frame_input: <<Self::Evm as EvmTr>::Frame as FrameTr>::FrameInit,
     ) -> Result<FrameResult, Self::Error> {
-        let mut frame_stack: Vec<Self::Frame> = vec![frame];
+        let res = evm.inspect_frame_init(first_frame_input)?;
+
+        if let ItemOrResult::Result(frame_result) = res {
+            return Ok(frame_result);
+        }
+
         loop {
-            let frame = frame_stack.last_mut().unwrap();
-            let call_or_result = self.inspect_frame_call(frame, evm)?;
+            let call_or_result = evm.inspect_frame_run()?;
 
             let result = match call_or_result {
-                ItemOrResult::Item(mut init) => {
-                    let (context, inspector) = evm.ctx_inspector();
-                    if let Some(output) = frame_start(context, inspector, &mut init) {
-                        output
-                    } else {
-                        match self.frame_init(frame, evm, init.clone())? {
-                            ItemOrResult::Item(mut new_frame) => {
-                                // only if new frame is created call initialize_interp hook.
-                                let (context, inspector) = evm.ctx_inspector();
-                                inspector.initialize_interp(new_frame.interpreter(), context);
-                                frame_stack.push(new_frame);
-                                continue;
-                            }
-                            // Dont pop the frame as new frame was not created.
-                            ItemOrResult::Result(mut result) => {
-                                let (context, inspector) = evm.ctx_inspector();
-                                frame_end(context, inspector, &init, &mut result);
-                                result
-                            }
+                ItemOrResult::Item(init) => {
+                    match evm.inspect_frame_init(init)? {
+                        ItemOrResult::Item(_) => {
+                            continue;
                         }
+                        // Do not pop the frame since no new frame was created
+                        ItemOrResult::Result(result) => result,
                     }
                 }
-                ItemOrResult::Result(mut result) => {
-                    let (context, inspector) = evm.ctx_inspector();
-                    frame_end(context, inspector, frame.frame_input(), &mut result);
-
-                    // Pop frame that returned result
-                    frame_stack.pop();
-                    result
-                }
+                ItemOrResult::Result(result) => result,
             };
 
-            let Some(frame) = frame_stack.last_mut() else {
+            if let Some(result) = evm.frame_return_result(result)? {
                 return Ok(result);
-            };
+            }
+        }
+    }
 
-            self.frame_return_result(frame, evm, result)?;
+    /// Run system call with inspection support.
+    ///
+    /// This method acts as [`Handler::run_system_call`] method for inspection.
+    /// Similar to [`InspectorHandler::inspect_run`] but skips validation and pre-execution phases,
+    /// going directly to execution with inspection support.
+    fn inspect_run_system_call(
+        &mut self,
+        evm: &mut Self::Evm,
+    ) -> Result<ExecutionResult<Self::HaltReason>, Self::Error> {
+        // dummy values that are not used.
+        let init_and_floor_gas = InitialAndFloorGas::new(0, 0);
+        let mut gas = self.tx_gas(evm, &init_and_floor_gas);
+        // System calls skip pre-execution, so the checkpoint that
+        // `inspect_execution` settles is opened here.
+        let checkpoint = evm.ctx().journal_mut().checkpoint();
+        // call execution with inspection and then output.
+        match self
+            .inspect_execution(evm, checkpoint, &mut gas)
+            .and_then(|exec_result| {
+                let exec_result = match exec_result {
+                    Some(exec_result) => exec_result,
+                    // Unreachable in practice: system calls carry no value and
+                    // target non-delegated system contracts, so no runtime
+                    // charges apply.
+                    None => self.runtime_oog_result(evm, &init_and_floor_gas, &mut gas)?,
+                };
+                // System calls have no intrinsic gas; build ResultGas from frame result.
+                let gas = exec_result.gas();
+                let result_gas = build_result_gas(false, gas, init_and_floor_gas);
+                self.execution_result(evm, exec_result, result_gas)
+            }) {
+            out @ Ok(_) => out,
+            Err(e) => self.catch_error(evm, e),
         }
     }
 }
 
+/// Handles the start of a frame by calling the appropriate inspector method.
 pub fn frame_start<CTX, INTR: InterpreterTypes>(
     context: &mut CTX,
-    inspector: &mut impl Inspector<CTX, INTR>,
+    inspector: &mut impl Inspector<CTX, INTR, FrameInput, FrameResult>,
     frame_input: &mut FrameInput,
 ) -> Option<FrameResult> {
+    // Generic hook before variant dispatch
+    if let Some(result) = inspector.frame_start(context, frame_input) {
+        return Some(result);
+    }
+    // Variant-specific dispatch
     match frame_input {
         FrameInput::Call(i) => {
             if let Some(output) = inspector.call(context, i) {
@@ -207,41 +211,35 @@ pub fn frame_start<CTX, INTR: InterpreterTypes>(
                 return Some(FrameResult::Create(output));
             }
         }
-        FrameInput::EOFCreate(i) => {
-            if let Some(output) = inspector.eofcreate(context, i) {
-                return Some(FrameResult::EOFCreate(output));
-            }
-        }
+        FrameInput::Empty => unreachable!(),
     }
     None
 }
 
+/// Handles the end of a frame by calling the appropriate inspector method.
 pub fn frame_end<CTX, INTR: InterpreterTypes>(
     context: &mut CTX,
-    inspector: &mut impl Inspector<CTX, INTR>,
+    inspector: &mut impl Inspector<CTX, INTR, FrameInput, FrameResult>,
     frame_input: &FrameInput,
     frame_output: &mut FrameResult,
 ) {
+    // Variant-specific dispatch first
     match frame_output {
         FrameResult::Call(outcome) => {
             let FrameInput::Call(i) = frame_input else {
-                panic!("FrameInput::Call expected");
+                panic!("FrameInput::Call expected {frame_input:?}");
             };
             inspector.call_end(context, i, outcome);
         }
         FrameResult::Create(outcome) => {
             let FrameInput::Create(i) = frame_input else {
-                panic!("FrameInput::Create expected");
+                panic!("FrameInput::Create expected {frame_input:?}");
             };
             inspector.create_end(context, i, outcome);
         }
-        FrameResult::EOFCreate(outcome) => {
-            let FrameInput::EOFCreate(i) = frame_input else {
-                panic!("FrameInput::EofCreate expected");
-            };
-            inspector.eofcreate_end(context, i, outcome);
-        }
     }
+    // Generic hook after variant dispatch
+    inspector.frame_end(context, frame_input, frame_output);
 }
 
 /// Run Interpreter loop with inspection support.
@@ -254,69 +252,122 @@ pub fn inspect_instructions<CTX, IT>(
     interpreter: &mut Interpreter<IT>,
     mut inspector: impl Inspector<CTX, IT>,
     instructions: &InstructionTable<IT, CTX>,
+    gas_table: &GasTable,
 ) -> InterpreterAction
 where
     CTX: ContextTr<Journal: JournalExt> + Host,
     IT: InterpreterTypes,
 {
-    interpreter.reset_control();
-
-    let mut log_num = context.journal().logs().len();
-    // Main loop
-    while interpreter.control.instruction_result().is_continue() {
-        // Get current opcode.
-        let opcode = interpreter.bytecode.opcode();
-
-        // Call Inspector step.
+    let mut instruction_journal_i = None;
+    loop {
         inspector.step(interpreter, context);
-        if interpreter.control.instruction_result() != InstructionResult::Continue {
+        if interpreter.bytecode.is_end() {
+            cold_path();
             break;
         }
 
-        // SAFETY: In analysis we are doing padding of bytecode so that we are sure that last
-        // byte instruction is STOP so we are safe to just increment program_counter bcs on last instruction
-        // it will do noop and just stop execution of this contract
-        interpreter.bytecode.relative_jump(1);
-
-        // Execute instruction.
-        instructions[opcode as usize](interpreter, context);
-
-        // check if new log is added
-        let new_log = context.journal().logs().len();
-        if log_num < new_log {
-            // as there is a change in log number this means new log is added
-            let log = context.journal().logs().last().unwrap().clone();
-            inspector.log(interpreter, context, log);
-            log_num = new_log;
+        instruction_journal_i = Some(context.journal().journal().len());
+        let logs_i = context.journal().logs().len();
+        if let Err(e) = interpreter.step(instructions, gas_table, context) {
+            cold_path();
+            if interpreter.bytecode.action().is_none() {
+                interpreter.halt(e);
+            }
         }
 
-        // Call step_end.
+        if context.journal().logs().len() != logs_i {
+            cold_path();
+            inspect_logs(Some(interpreter), context, &mut inspector, logs_i);
+        }
+
         inspector.step_end(interpreter, context);
+
+        if interpreter.bytecode.is_end() {
+            cold_path();
+            break;
+        }
     }
 
     let next_action = interpreter.take_next_action();
 
-    // handle selfdestruct
-    if let InterpreterAction::Return { result } = &next_action {
+    // Handle selfdestruct.
+    if let InterpreterAction::Return(result) = &next_action {
         if result.result == InstructionResult::SelfDestruct {
-            match context.journal().last_journal().last() {
-                Some(JournalEntry::AccountDestroyed {
-                    address,
-                    target,
-                    had_balance,
-                    ..
-                }) => {
-                    inspector.selfdestruct(*address, *target, *had_balance);
-                }
-                Some(JournalEntry::BalanceTransfer {
-                    from, to, balance, ..
-                }) => {
-                    inspector.selfdestruct(*from, *to, *balance);
-                }
-                _ => {}
+            if let Some(journal_i) = instruction_journal_i {
+                inspect_selfdestruct(context, &mut inspector, journal_i);
             }
         }
     }
 
     next_action
+}
+
+/// Forwards the logs journaled since `logs_i` to the inspector.
+///
+/// `interpreter` is `Some` on the instruction path, where the logs belong to
+/// the instruction that just ran and so go to [`Inspector::log_full`]; the
+/// frame-init paths report a value transfer that has no interpreter of its own
+/// and go to [`Inspector::log`].
+///
+/// Cold: callers check `logs_i` against the journal length first, and most
+/// instructions journal no log at all.
+#[inline(never)]
+#[cold]
+pub(crate) fn inspect_logs<CTX, IT>(
+    interpreter: Option<&mut Interpreter<IT>>,
+    context: &mut CTX,
+    inspector: &mut impl Inspector<CTX, IT>,
+    logs_i: usize,
+) where
+    CTX: ContextTr<Journal: JournalExt>,
+    IT: InterpreterTypes,
+{
+    let logs = context.journal_mut().logs()[logs_i..].to_vec();
+    match interpreter {
+        Some(interpreter) => {
+            for log in logs {
+                inspector.log_full(interpreter, context, log);
+            }
+        }
+        None => {
+            for log in logs {
+                inspector.log(context, log);
+            }
+        }
+    }
+}
+
+#[inline(never)]
+#[cold]
+fn inspect_selfdestruct<CTX, IT>(
+    context: &mut CTX,
+    inspector: &mut impl Inspector<CTX, IT>,
+    journal_i: usize,
+) where
+    CTX: ContextTr<Journal: JournalExt> + Host,
+    IT: InterpreterTypes,
+{
+    let entry = context
+        .journal_mut()
+        .journal()
+        .get(journal_i..)
+        .and_then(|entries| entries.last());
+
+    if let Some(
+        JournalEntry::AccountDestroyed {
+            address: contract,
+            target: to,
+            had_balance: balance,
+            ..
+        }
+        | JournalEntry::BalanceTransfer {
+            from: contract,
+            to,
+            balance,
+            ..
+        },
+    ) = entry
+    {
+        inspector.selfdestruct(*contract, *to, *balance);
+    }
 }

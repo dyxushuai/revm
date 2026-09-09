@@ -7,6 +7,303 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [43.0.1](https://github.com/bluealloy/revm/compare/revm-statetest-types-v43.0.0...revm-statetest-types-v43.0.1) - 2026-09-08
+
+### Other
+
+- updated the following local packages: revm-context-interface, revm-context
+
+## [43.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v42.0.0...revm-statetest-types-v43.0.0) - 2026-08-20
+
+### Other
+
+- updated the following local packages: revm-primitives, revm-state, revm-context-interface, revm-context, revm-database
+
+## [42.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v41.0.0...revm-statetest-types-v42.0.0) - 2026-07-22
+
+### Added
+
+- *(amsterdam)* glamsterdam devnet-7 alignment (EIP-2780 runtime gas phase, fixtures v7.0.0) ([#3795](https://github.com/bluealloy/revm/pull/3795))
+- *(amsterdam)* glam devnet-6 gas accounting & EIP alignment ([#3782](https://github.com/bluealloy/revm/pull/3782))
+
+### Other
+
+- *(revme)* separate bytecode from account in test state ([#3803](https://github.com/bluealloy/revm/pull/3803))
+
+## [41.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v19.0.3...revm-statetest-types-v41.0.0) - 2026-06-11
+
+### Other
+
+- updated the following local packages: revm-state, revm-context-interface, revm-context, revm-database
+
+## [19.0.3](https://github.com/bluealloy/revm/compare/revm-statetest-types-v19.0.2...revm-statetest-types-v19.0.3) - 2026-05-26
+
+### Other
+
+- updated the following local packages: revm-database, revm-context
+
+## [19.0.2](https://github.com/bluealloy/revm/compare/revm-statetest-types-v19.0.1...revm-statetest-types-v19.0.2) - 2026-05-22
+
+### Other
+
+- updated the following local packages: revm-context-interface, revm-context, revm-database
+
+## [19.0.1](https://github.com/bluealloy/revm/compare/revm-statetest-types-v19.0.0...revm-statetest-types-v19.0.1) - 2026-05-21
+
+### Other
+
+- updated the following local packages: revm-context-interface, revm-context
+
+## [19.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v17.0.1...revm-statetest-types-v19.0.0) - 2026-05-19
+
+### Other
+
+- backport v107 release notes from branch ([#3617](https://github.com/bluealloy/revm/pull/3617))
+- rm op-revm (migrated to ethereum-optimism/optimism) ([#3568](https://github.com/bluealloy/revm/pull/3568))
+
+## [17.0.1](https://github.com/bluealloy/revm/compare/revm-statetest-types-v17.0.0...revm-statetest-types-v17.0.1) - 2026-04-17
+
+### Other
+
+- updated the following local packages: revm-state, revm-context-interface, revm-context, revm-database
+
+## [17.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v16.0.0...revm-statetest-types-v17.0.0) - 2026-04-10
+
+### Other
+
+- remove unused bytecode dependency from revm-statetest-types ([#3485](https://github.com/bluealloy/revm/pull/3485))
+
+## [16.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v15.0.0...revm-statetest-types-v16.0.0) - 2026-03-04
+
+### Other
+
+- bump revm-database-interface to v10.0.0
+
+## [15.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v14.0.0...revm-statetest-types-v15.0.0) - 2026-03-02
+
+### Added
+
+- *(statetest-types)* add slot_number support (EIP-7843) ([#3391](https://github.com/bluealloy/revm/pull/3391))
+- Implement EIP-7843 SLOTNUM opcode for Amsterdam ([#3340](https://github.com/bluealloy/revm/pull/3340))
+
+### Other
+
+- move EIP-161 state clear into journal finalize ([#3444](https://github.com/bluealloy/revm/pull/3444))
+- *(statetest-types)* add BPO2ToAmsterdamAtTime15k fork spec ([#3397](https://github.com/bluealloy/revm/pull/3397))
+- remove GPL mention and update gmp feature comments ([#3383](https://github.com/bluealloy/revm/pull/3383))
+- use fixed bytes hashmaps from alloy-core ([#3358](https://github.com/bluealloy/revm/pull/3358))
+
+## [14.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v13.1.0...revm-statetest-types-v14.0.0) - 2026-01-15
+
+### Added
+
+- move GasParams to Cfg ([#3229](https://github.com/bluealloy/revm/pull/3229))
+- Propagate `map-foldhash` Feature Through Dependency Chain ([#3252](https://github.com/bluealloy/revm/pull/3252))
+- BAL EIP-7928 ([#3070](https://github.com/bluealloy/revm/pull/3070))
+
+### Fixed
+
+- *(statetest)* use spec-aware blob base fee update fraction ([#3210](https://github.com/bluealloy/revm/pull/3210))
+
+### Other
+
+- apply improvements from ai-bot labeled PRs ([#3297](https://github.com/bluealloy/revm/pull/3297))
+- fix typos, grammar errors, and improve documentation consistency ([#3294](https://github.com/bluealloy/revm/pull/3294))
+- happy new year, 2026 licence ([#3272](https://github.com/bluealloy/revm/pull/3272))
+- re-export statetest-types from revm crate behind test-types feature ([#3247](https://github.com/bluealloy/revm/pull/3247))
+- *(fmt)* merge all imports ([#3184](https://github.com/bluealloy/revm/pull/3184))
+
+## [13.1.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v13.0.0...revm-statetest-types-v13.1.0) - 2025-11-14
+
+### Other
+
+- updated the following local packages: revm
+
+## [13.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v11.0.2...revm-statetest-types-v13.0.0) - 2025-11-10
+
+### Other
+
+- updated the following local packages: revm
+
+## [11.0.2](https://github.com/bluealloy/revm/compare/revm-statetest-types-v11.0.1...revm-statetest-types-v11.0.2) - 2025-11-10
+
+### Other
+
+- updated the following local packages: revm
+
+## [11.0.1](https://github.com/bluealloy/revm/compare/revm-statetest-types-v11.0.0...revm-statetest-types-v11.0.1) - 2025-11-07
+
+### Fixed
+
+- *(revme)* use primitive hashmap in statetest ([#3137](https://github.com/bluealloy/revm/pull/3137))
+
+## [11.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v10.2.0...revm-statetest-types-v11.0.0) - 2025-10-30
+
+### Other
+
+- updated the following local packages: revm
+
+## [10.2.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v10.1.2...revm-statetest-types-v10.2.0) - 2025-10-17
+
+### Other
+
+- updated the following local packages: revm
+
+## [10.1.2](https://github.com/bluealloy/revm/compare/revm-statetest-types-v10.1.1...revm-statetest-types-v10.1.2) - 2025-10-15
+
+### Other
+
+- updated the following local packages: revm
+
+## [10.1.1](https://github.com/bluealloy/revm/compare/revm-statetest-types-v10.1.0...revm-statetest-types-v10.1.1) - 2025-10-15
+
+### Other
+
+- updated the following local packages: revm
+
+## [10.1.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v10.0.0...revm-statetest-types-v10.1.0) - 2025-10-09
+
+### Other
+
+- updated the following local packages: revm
+
+## [10.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v9.0.3...revm-statetest-types-v10.0.0) - 2025-10-07
+
+### Added
+
+- *(revme)* ef blockchain tests cli ([#2935](https://github.com/bluealloy/revm/pull/2935))
+
+### Fixed
+
+- Apply spelling corrections from PRs #2926, #2915, #2908 ([#2978](https://github.com/bluealloy/revm/pull/2978))
+
+### Other
+
+- changelog update for v87 ([#3056](https://github.com/bluealloy/revm/pull/3056))
+- add boundless ([#3043](https://github.com/bluealloy/revm/pull/3043))
+- *(btest)* 0 chainid is considered none ([#3022](https://github.com/bluealloy/revm/pull/3022))
+- prealloc few frames ([#2965](https://github.com/bluealloy/revm/pull/2965))
+- add SECURITY.md ([#2956](https://github.com/bluealloy/revm/pull/2956))
+- remove parent blob gas used and excess ([#2933](https://github.com/bluealloy/revm/pull/2933))
+- *(cleanup)* Remove EIP-7918 related functions and EIP file  ([#2925](https://github.com/bluealloy/revm/pull/2925))
+
+## [9.0.3](https://github.com/bluealloy/revm/compare/revm-statetest-types-v9.0.2...revm-statetest-types-v9.0.3) - 2025-09-23
+
+### Other
+
+- updated the following local packages: revm
+
+## [9.0.2](https://github.com/bluealloy/revm/compare/revm-statetest-types-v9.0.1...revm-statetest-types-v9.0.2) - 2025-08-23
+
+### Other
+
+- updated the following local packages: revm
+
+## [9.0.1](https://github.com/bluealloy/revm/compare/revm-statetest-types-v9.0.0...revm-statetest-types-v9.0.1) - 2025-08-12
+
+### Other
+
+- updated the following local packages: revm
+
+## [9.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v8.0.5...revm-statetest-types-v9.0.0) - 2025-08-06
+
+### Other
+
+- update README.md ([#2842](https://github.com/bluealloy/revm/pull/2842))
+- add rust-version and note about MSRV ([#2789](https://github.com/bluealloy/revm/pull/2789))
+
+## [8.0.5](https://github.com/bluealloy/revm/compare/revm-statetest-types-v8.0.4...revm-statetest-types-v8.0.5) - 2025-07-23
+
+### Other
+
+- updated the following local packages: revm
+
+## [8.0.4](https://github.com/bluealloy/revm/compare/revm-statetest-types-v8.0.3...revm-statetest-types-v8.0.4) - 2025-07-14
+
+### Other
+
+- updated the following local packages: revm
+
+## [8.0.3](https://github.com/bluealloy/revm/compare/revm-statetest-types-v8.0.2...revm-statetest-types-v8.0.3) - 2025-07-03
+
+### Other
+
+- updated the following local packages: revm
+
+## [8.0.2](https://github.com/bluealloy/revm/compare/revm-statetest-types-v8.0.1...revm-statetest-types-v8.0.2) - 2025-06-30
+
+### Other
+
+- cargo clippy --fix --all ([#2671](https://github.com/bluealloy/revm/pull/2671))
+- statetest runner cleanup ([#2665](https://github.com/bluealloy/revm/pull/2665))
+
+## [8.0.1](https://github.com/bluealloy/revm/compare/revm-statetest-types-v8.0.0...revm-statetest-types-v8.0.1) - 2025-06-20
+
+### Other
+
+- updated the following local packages: revm
+
+## [8.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v7.0.0...revm-statetest-types-v8.0.0) - 2025-06-19
+
+### Added
+
+- *(precompile)* rug/gmp-based modexp ([#2596](https://github.com/bluealloy/revm/pull/2596))
+
+### Other
+
+- lints for examples ([#2650](https://github.com/bluealloy/revm/pull/2650))
+
+## [7.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v6.0.0...revm-statetest-types-v7.0.0) - 2025-06-06
+
+### Added
+
+- transact multi tx ([#2517](https://github.com/bluealloy/revm/pull/2517))
+
+### Other
+
+- tag v75 revm v24.0.1 ([#2563](https://github.com/bluealloy/revm/pull/2563)) ([#2589](https://github.com/bluealloy/revm/pull/2589))
+- unify calling of journal account loading ([#2561](https://github.com/bluealloy/revm/pull/2561))
+
+## [6.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v5.0.0...revm-statetest-types-v6.0.0) - 2025-05-31
+
+### Other
+
+- unify calling of journal account loading
+
+## [5.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v4.1.0...revm-statetest-types-v5.0.0) - 2025-05-22
+
+### Other
+
+- add TxEnvBuilder::build_fill ([#2536](https://github.com/bluealloy/revm/pull/2536))
+- make crates.io version badge clickable ([#2526](https://github.com/bluealloy/revm/pull/2526))
+- Storage Types Alias ([#2461](https://github.com/bluealloy/revm/pull/2461))
+
+## [4.1.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v4.0.0...revm-statetest-types-v4.1.0) - 2025-05-07
+
+Dependency bump
+
+## [4.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v3.0.1...revm-statetest-types-v4.0.0) - 2025-05-07
+
+### Added
+
+- *(EOF)* Changes needed for devnet-1 ([#2377](https://github.com/bluealloy/revm/pull/2377))
+
+### Other
+
+- copy edit The Book ([#2463](https://github.com/bluealloy/revm/pull/2463))
+- bump dependency version ([#2431](https://github.com/bluealloy/revm/pull/2431))
+- fixed broken link ([#2421](https://github.com/bluealloy/revm/pull/2421))
+
+## [3.0.1](https://github.com/bluealloy/revm/compare/revm-statetest-types-v3.0.0..revm-statetest-types-v3.0.1) - 2025-04-15
+
+### Other
+
+## [3.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v2.0.0...revm-statetest-types-v3.0.0) - 2025-04-09
+
+### Other
+
+- updated the following local packages: revm
+
 ## [2.0.0](https://github.com/bluealloy/revm/compare/revm-statetest-types-v1.0.0...revm-statetest-types-v2.0.0) - 2025-03-28
 
 ### Other

@@ -1,105 +1,97 @@
 use super::i256::{i256_div, i256_mod};
 use crate::{
-    gas,
-    interpreter::Interpreter,
-    interpreter_types::{InterpreterTypes, LoopControl, RuntimeFlag, StackTr},
-    Host,
+    interpreter_types::{InterpreterTypes as ITy, StackTr},
+    InstructionContext as Ictx, InstructionExecResult as Result,
 };
+use context_interface::Host;
 use primitives::U256;
 
-pub fn add<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::VERYLOW);
-    popn_top!([op1], op2, interpreter);
+/// Implements the ADD instruction - adds two values from stack.
+pub fn add<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
     *op2 = op1.wrapping_add(*op2);
+    Ok(())
 }
 
-pub fn mul<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::LOW);
-    popn_top!([op1], op2, interpreter);
+/// Implements the MUL instruction - multiplies two values from stack.
+pub fn mul<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
     *op2 = op1.wrapping_mul(*op2);
+    Ok(())
 }
 
-pub fn sub<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::VERYLOW);
-    popn_top!([op1], op2, interpreter);
+/// Implements the SUB instruction - subtracts two values from stack.
+pub fn sub<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
     *op2 = op1.wrapping_sub(*op2);
+    Ok(())
 }
 
-pub fn div<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::LOW);
-    popn_top!([op1], op2, interpreter);
+/// Implements the DIV instruction - divides two values from stack.
+pub fn div<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
     if !op2.is_zero() {
         *op2 = op1.wrapping_div(*op2);
     }
+    Ok(())
 }
 
-pub fn sdiv<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::LOW);
-    popn_top!([op1], op2, interpreter);
+/// Implements the SDIV instruction.
+///
+/// Performs signed division of two values from stack.
+pub fn sdiv<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
     *op2 = i256_div(op1, *op2);
+    Ok(())
 }
 
-pub fn rem<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::LOW);
-    popn_top!([op1], op2, interpreter);
+/// Implements the MOD instruction.
+///
+/// Pops two values from stack and pushes the remainder of their division.
+pub fn rem<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
     if !op2.is_zero() {
         *op2 = op1.wrapping_rem(*op2);
     }
+    Ok(())
 }
 
-pub fn smod<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::LOW);
-    popn_top!([op1], op2, interpreter);
-    *op2 = i256_mod(op1, *op2)
+/// Implements the SMOD instruction.
+///
+/// Performs signed modulo of two values from stack.
+pub fn smod<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
+    *op2 = i256_mod(op1, *op2);
+    Ok(())
 }
 
-pub fn addmod<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::MID);
-    popn_top!([op1, op2], op3, interpreter);
-    *op3 = op1.add_mod(op2, *op3)
+/// Implements the ADDMOD instruction.
+///
+/// Pops three values from stack and pushes (a + b) % n.
+pub fn addmod<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1, op2], op3, context.interpreter);
+    *op3 = op1.add_mod(op2, *op3);
+    Ok(())
 }
 
-pub fn mulmod<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::MID);
-    popn_top!([op1, op2], op3, interpreter);
-    *op3 = op1.mul_mod(op2, *op3)
+/// Implements the MULMOD instruction.
+///
+/// Pops three values from stack and pushes (a * b) % n.
+pub fn mulmod<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1, op2], op3, context.interpreter);
+    *op3 = op1.mul_mod(op2, *op3);
+    Ok(())
 }
 
-pub fn exp<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    let spec_id = interpreter.runtime_flag.spec_id();
-    popn_top!([op1], op2, interpreter);
-    gas_or_fail!(interpreter, gas::exp_cost(spec_id, *op2));
+/// Implements the EXP instruction - exponentiates two values from stack.
+pub fn exp<IT: ITy, H: Host + ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([op1], op2, context.interpreter);
+    gas!(
+        context.interpreter,
+        context.host.gas_params().exp_cost(*op2)
+    );
     *op2 = op1.pow(*op2);
+    Ok(())
 }
 
 /// Implements the `SIGNEXTEND` opcode as defined in the Ethereum Yellow Paper.
@@ -131,12 +123,8 @@ pub fn exp<WIRE: InterpreterTypes, H: Host + ?Sized>(
 ///
 /// Similarly, if `b == 0` then the yellow paper says the output should start with all zeros,
 /// then end with bits from `b`; this is equal to `y & mask` where `&` is bitwise `AND`.
-pub fn signextend<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    gas!(interpreter, gas::LOW);
-    popn_top!([ext], x, interpreter);
+pub fn signextend<IT: ITy, H: ?Sized>(context: Ictx<'_, H, IT>) -> Result {
+    popn_top!([ext], x, context.interpreter);
     // For 31 we also don't need to do anything.
     if ext < U256::from(31) {
         let ext = ext.as_limbs()[0];
@@ -145,4 +133,5 @@ pub fn signextend<WIRE: InterpreterTypes, H: Host + ?Sized>(
         let mask = (U256::from(1) << bit_index) - U256::from(1);
         *x = if bit { *x | !mask } else { *x & mask };
     }
+    Ok(())
 }

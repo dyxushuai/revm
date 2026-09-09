@@ -1,33 +1,56 @@
 use crate::{deserializer::deserialize_maybe_empty, TestAuthorization};
-use revm::{
-    context_interface::transaction::{AccessList, TransactionType},
-    primitives::{Address, Bytes, B256, U256},
-};
+use context::TransactionType;
+use context_interface::transaction::AccessList;
+use primitives::{Address, Bytes, B256, U256};
 use serde::{Deserialize, Serialize};
 
 /// Transaction parts.
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionParts {
+    /// Transaction type (0=Legacy, 1=EIP-2930, 2=EIP-1559, 3=EIP-4844, 4=EIP-7702)
+    #[serde(rename = "type")]
+    pub tx_type: Option<u8>,
+    /// Chain id of the transaction. If it differs from the network chain id the
+    /// transaction is expected to be rejected with `INVALID_CHAINID`.
+    pub chain_id: Option<U256>,
+    /// Transaction data/input (multiple variants for different test cases)
     pub data: Vec<Bytes>,
+    /// Gas limit values (multiple variants for different test cases)
     pub gas_limit: Vec<U256>,
+    /// Gas price (for legacy and EIP-2930 transactions)
     pub gas_price: Option<U256>,
+    /// Transaction nonce
     pub nonce: U256,
-    pub secret_key: B256,
+    /// Private key for signing the transaction.
+    ///
+    /// State tests are unsigned; the secret key stands in for a valid
+    /// signature. A fixture without one models an invalidly-signed
+    /// transaction (e.g. `test_bad_v_r_s`) and is expected to be rejected.
+    pub secret_key: Option<B256>,
     /// if sender is not present we need to derive it from secret key.
     #[serde(default)]
     pub sender: Option<Address>,
+    /// Recipient address (None for contract creation)
     #[serde(default, deserialize_with = "deserialize_maybe_empty")]
     pub to: Option<Address>,
+    /// Ether value to transfer (multiple variants for different test cases)
     pub value: Vec<U256>,
+    /// Maximum fee per gas (EIP-1559 transactions)
     pub max_fee_per_gas: Option<U256>,
+    /// Maximum priority fee per gas (EIP-1559 transactions)
     pub max_priority_fee_per_gas: Option<U256>,
-
+    /// Initcodes for contract creation (EIP-7873)
+    pub initcodes: Option<Vec<Bytes>>,
+    /// Access lists for different test cases (EIP-2930)
     #[serde(default)]
     pub access_lists: Vec<Option<AccessList>>,
+    /// Authorization list (EIP-7702)
     pub authorization_list: Option<Vec<TestAuthorization>>,
+    /// Blob versioned hashes (EIP-4844)
     #[serde(default)]
     pub blob_versioned_hashes: Vec<B256>,
+    /// Maximum fee per blob gas (EIP-4844)
     pub max_fee_per_blob_gas: Option<U256>,
 }
 
@@ -40,6 +63,10 @@ impl TransactionParts {
     ///   * It has both blob gas and no destination.
     ///   * It has authorization list and no destination.
     pub fn tx_type(&self, access_list_index: usize) -> Option<TransactionType> {
+        if let Some(tx_type) = self.tx_type {
+            return Some(TransactionType::from(tx_type));
+        }
+
         let mut tx_type = TransactionType::Legacy;
 
         // If it has access list it is EIP-2930 tx
@@ -58,14 +85,14 @@ impl TransactionParts {
         if self.max_fee_per_blob_gas.is_some() {
             // target need to be present for EIP-4844 tx
             self.to?;
-            tx_type = TransactionType::Eip4844;
+            return Some(TransactionType::Eip4844);
         }
 
         // And if it has authorization list it is EIP-7702 tx
         if self.authorization_list.is_some() {
             // Target need to be present for EIP-7702 tx
             self.to?;
-            tx_type = TransactionType::Eip7702;
+            return Some(TransactionType::Eip7702);
         }
 
         Some(tx_type)
@@ -76,8 +103,11 @@ impl TransactionParts {
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TxPartIndices {
+    /// Index into the data array
     pub data: usize,
+    /// Index into the gas_limit array
     pub gas: usize,
+    /// Index into the value array
     pub value: usize,
 }
 

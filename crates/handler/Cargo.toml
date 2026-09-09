@@ -1,25 +1,21 @@
 [package]
 name = "revm-handler"
 description = "Revm handler crates"
-version = "2.0.0"
+version = "43.0.2"
 authors.workspace = true
 edition.workspace = true
 keywords.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
+rust-version.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
-[lints.rust]
-unreachable_pub = "warn"
-unused_must_use = "deny"
-rust_2018_idioms = "deny"
-
-[lints.rustdoc]
-all = "warn"
+[lints]
+workspace = true
 
 [dependencies]
 # revm
@@ -31,18 +27,15 @@ context.workspace = true
 primitives.workspace = true
 state.workspace = true
 bytecode.workspace = true
+
 auto_impl.workspace = true
+derive-where.workspace = true
 
 # Optional
-serde = { version = "1.0", default-features = false, features = [
-    "derive",
-    "rc",
-], optional = true }
+serde = { workspace = true, optional = true }
 
 [dev-dependencies]
 database.workspace = true
-alloy-eip7702.workspace = true
-alloy-provider.workspace = true
 alloy-signer.workspace = true
 alloy-signer-local.workspace = true
 
@@ -50,7 +43,6 @@ alloy-signer-local.workspace = true
 default = ["std"]
 std = [
 	"serde?/std",
-	"alloy-eip7702/std",
 	"bytecode/std",
 	"context/std",
 	"context-interface/std",
@@ -59,18 +51,21 @@ std = [
 	"interpreter/std",
 	"precompile/std",
 	"primitives/std",
-	"state/std"
+	"state/std",
 ]
 serde = [
 	"dep:serde",
 	"primitives/serde",
 	"state/serde",
 	"context-interface/serde",
-	"alloy-eip7702/serde",
 	"bytecode/serde",
 	"context/serde",
 	"database/serde",
 	"database-interface/serde",
-	"interpreter/serde"
+	"interpreter/serde",
+	"derive-where/serde",
 ]
+asyncdb = ["std", "context/asyncdb", "database-interface/asyncdb"]
+
+# Deprecated, please use `serde` feature instead.
 serde-json = ["serde"]

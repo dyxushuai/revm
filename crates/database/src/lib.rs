@@ -7,13 +7,20 @@ extern crate alloc as std;
 #[cfg(feature = "alloydb")]
 mod alloydb;
 
+pub use bytecode;
+pub use database_interface;
+pub use primitives;
+pub use state;
+
 pub use database_interface::*;
 
+/// In-memory database implementations.
 pub mod in_memory_db;
+/// State management and tracking.
 pub mod states;
 
 #[cfg(feature = "alloydb")]
-pub use alloydb::{AlloyDB, BlockId};
+pub use alloydb::{AlloyDB, AlloyDBError, BlockId};
 
 pub use in_memory_db::*;
 pub use states::{

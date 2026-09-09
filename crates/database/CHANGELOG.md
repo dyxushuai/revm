@@ -7,6 +7,304 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [43.0.0](https://github.com/bluealloy/revm/compare/revm-database-v42.0.0...revm-database-v43.0.0) - 2026-08-20
+
+### Fixed
+
+- *(database)* cache newly created contract code ([#3855](https://github.com/bluealloy/revm/pull/3855))
+
+## [41.1.0](https://github.com/bluealloy/revm/compare/revm-database-v41.0.0...revm-database-v41.1.0) - 2026-07-22
+
+### Added
+
+- *(database)* add database fallback mode for BAL misses ([#3754](https://github.com/bluealloy/revm/pull/3754))
+
+### Other
+
+- *(database)* avoid double cloning in take_n_reverts ([#3539](https://github.com/bluealloy/revm/pull/3539))
+- *(database)* use Option::filter in BundleAccount::take_info_revert ([#3730](https://github.com/bluealloy/revm/pull/3730))
+
+## [41.0.0](https://github.com/bluealloy/revm/compare/revm-database-v15.0.2...revm-database-v41.0.0) - 2026-06-11
+
+### Added
+
+- *(database)* add conditional bundle update builder ([#3729](https://github.com/bluealloy/revm/pull/3729))
+
+### Other
+
+- avoid reallocations and cloning during commit ([#3732](https://github.com/bluealloy/revm/pull/3732))
+
+## [15.0.2](https://github.com/bluealloy/revm/compare/revm-database-v15.0.1...revm-database-v15.0.2) - 2026-05-26
+
+### Added
+
+- add `OnStateHook` for `State<DB>` ([#3710](https://github.com/bluealloy/revm/pull/3710))
+
+## [15.0.1](https://github.com/bluealloy/revm/compare/revm-database-v15.0.0...revm-database-v15.0.1) - 2026-05-22
+
+### Other
+
+- updated the following local packages: revm-database-interface
+
+## [15.0.0](https://github.com/bluealloy/revm/compare/revm-database-v13.0.1...revm-database-v15.0.0) - 2026-05-19
+
+### Added
+
+- show address or slot in BAL error ([#3619](https://github.com/bluealloy/revm/pull/3619))
+- *(state)* Optimized index type for transaction ID using non-max ([#3610](https://github.com/bluealloy/revm/pull/3610))
+- *(account)* Optimized index type for account ID using `non-max` ([#3605](https://github.com/bluealloy/revm/pull/3605))
+- *(database)* add State::has_bal helper ([#3604](https://github.com/bluealloy/revm/pull/3604))
+
+### Fixed
+
+- gracefully handle commits of non-cached accounts ([#3657](https://github.com/bluealloy/revm/pull/3657))
+
+### Other
+
+- *(database)* preserve commit_iter semantics ([#3681](https://github.com/bluealloy/revm/pull/3681))
+- update alloy-eip7928 to newer version ([#3627](https://github.com/bluealloy/revm/pull/3627))
+- backport v107 release notes from branch ([#3617](https://github.com/bluealloy/revm/pull/3617))
+- enable and fix clippy::missing_const_for_fn ([#3592](https://github.com/bluealloy/revm/pull/3592))
+- rm op-revm (migrated to ethereum-optimism/optimism) ([#3568](https://github.com/bluealloy/revm/pull/3568))
+
+## [13.0.1](https://github.com/bluealloy/revm/compare/revm-database-v13.0.0...revm-database-v13.0.1) - 2026-04-17
+
+### Other
+
+- updated the following local packages: revm-state, revm-database-interface
+
+## [13.0.0](https://github.com/bluealloy/revm/compare/revm-database-v12.0.0...revm-database-v13.0.0) - 2026-04-10
+
+### Added
+
+- add crate-level re-exports for all revm-* dependencies ([#3507](https://github.com/bluealloy/revm/pull/3507))
+
+### Other
+
+- remove no-op background transition merge builder toggle ([#3510](https://github.com/bluealloy/revm/pull/3510))
+
+## [12.0.0](https://github.com/bluealloy/revm/compare/revm-database-v11.0.0...revm-database-v12.0.0) - 2026-03-04
+
+### Other
+
+- bump revm-database-interface to v10.0.0
+
+## [11.0.0](https://github.com/bluealloy/revm/compare/revm-database-v10.0.0...revm-database-v11.0.0) - 2026-03-02
+
+### Added
+
+- *(database)* add clear() to CacheState and TransitionState ([#3390](https://github.com/bluealloy/revm/pull/3390))
+- *(database)* add iter and lowest helpers to BlockHashCache ([#3352](https://github.com/bluealloy/revm/pull/3352))
+- *(database)* add StateBuilder::with_bal_builder_if ([#3351](https://github.com/bluealloy/revm/pull/3351))
+- *(database)* add storage getter to BundleState ([#3321](https://github.com/bluealloy/revm/pull/3321))
+
+### Fixed
+
+- forward storage_by_account_id in WrapDatabaseRef ([#3441](https://github.com/bluealloy/revm/pull/3441))
+- *(database)* allow EIP161 state clear for empty Loaded and Changed accounts ([#3421](https://github.com/bluealloy/revm/pull/3421))
+- *(db)* use self.storage() in storage_by_account_id to avoid cache bypass ([#3385](https://github.com/bluealloy/revm/pull/3385))
+- *(bal)* fix populated account if pre-state was none ([#3357](https://github.com/bluealloy/revm/pull/3357))
+- *(database)* BlockHashCache incorrectly returns zero for block 0 ([#3319](https://github.com/bluealloy/revm/pull/3319))
+
+### Other
+
+- move EIP-161 state clear into journal finalize ([#3444](https://github.com/bluealloy/revm/pull/3444))
+- deduplicate CacheDB::basic by delegating to load_account ([#3447](https://github.com/bluealloy/revm/pull/3447))
+- *(database)* add reserve calls in merge_transitions and extend_state ([#3430](https://github.com/bluealloy/revm/pull/3430))
+- reserve capacity in add_transitions ([#3373](https://github.com/bluealloy/revm/pull/3373))
+- remove GPL mention and update gmp feature comments ([#3383](https://github.com/bluealloy/revm/pull/3383))
+- use fixed bytes hashmaps from alloy-core ([#3358](https://github.com/bluealloy/revm/pull/3358))
+- Use O(1) ring buffer cache for block hashes instead of BTreeMap ([#3299](https://github.com/bluealloy/revm/pull/3299))
+
+## [10.0.0](https://github.com/bluealloy/revm/compare/revm-database-v9.0.6...revm-database-v10.0.0) - 2026-01-15
+
+### Added
+
+- *(cache-db)* Added pritty_print for CacheDB ([#3296](https://github.com/bluealloy/revm/pull/3296))
+- Propagate `map-foldhash` Feature Through Dependency Chain ([#3252](https://github.com/bluealloy/revm/pull/3252))
+- BAL EIP-7928 ([#3070](https://github.com/bluealloy/revm/pull/3070))
+- DatabaseCommitExt::drain_balances ([#3205](https://github.com/bluealloy/revm/pull/3205))
+- DatabaseCommitExt + increment_balances ([#3195](https://github.com/bluealloy/revm/pull/3195))
+- DatabaseCommit::commit_iter ([#3197](https://github.com/bluealloy/revm/pull/3197))
+- Restrict Database::Error. JournaledAccountTr ([#3199](https://github.com/bluealloy/revm/pull/3199))
+
+### Fixed
+
+- *(database)* return error instead of panic when block not found in AlloyDB ([#3284](https://github.com/bluealloy/revm/pull/3284))
+- *(database)* make DatabaseCommit dyn-compatible ([#3264](https://github.com/bluealloy/revm/pull/3264))
+- *(database)* prevent deadlock in ([#3251](https://github.com/bluealloy/revm/pull/3251))
+- *(database)* verify handle belongs to current runtime before block_in_place ([#3212](https://github.com/bluealloy/revm/pull/3212))
+
+### Other
+
+- fix typos, grammar errors, and improve documentation consistency ([#3294](https://github.com/bluealloy/revm/pull/3294))
+- fix typos and grammar in database crate ([#3279](https://github.com/bluealloy/revm/pull/3279))
+- happy new year, 2026 licence ([#3272](https://github.com/bluealloy/revm/pull/3272))
+- avoid collect in CacheState commit ([#3242](https://github.com/bluealloy/revm/pull/3242))
+- *(database)* use fixed hashmaps in cache db ([#3231](https://github.com/bluealloy/revm/pull/3231))
+- *(database)* avoid triple cache lookup ([#3232](https://github.com/bluealloy/revm/pull/3232))
+- optimize vector initialization with size hints in state and precompile modules ([#3191](https://github.com/bluealloy/revm/pull/3191))
+
+## [9.0.6](https://github.com/bluealloy/revm/compare/revm-database-v9.0.5...revm-database-v9.0.6) - 2025-11-14
+
+### Fixed
+
+- *(database)* return correct bytecode in BenchmarkDB::code_by_hash ([#3170](https://github.com/bluealloy/revm/pull/3170))
+
+## [9.0.5](https://github.com/bluealloy/revm/compare/revm-database-v9.0.4...revm-database-v9.0.5) - 2025-11-10
+
+### Fixed
+
+- *(op)* Ensure L1Block account is always loaded ([#3150](https://github.com/bluealloy/revm/pull/3150))
+
+## [9.0.4](https://github.com/bluealloy/revm/compare/revm-database-v9.0.3...revm-database-v9.0.4) - 2025-11-07
+
+### Other
+
+- updated the following local packages: revm-primitives, revm-bytecode, revm-state, revm-database-interface
+
+## [9.0.3](https://github.com/bluealloy/revm/compare/revm-database-v9.0.2...revm-database-v9.0.3) - 2025-10-30
+
+### Other
+
+- updated the following local packages: revm-bytecode, revm-state, revm-database-interface
+
+## [9.0.2](https://github.com/bluealloy/revm/compare/revm-database-v9.0.1...revm-database-v9.0.2) - 2025-10-15
+
+### Other
+
+- updated the following local packages: revm-bytecode, revm-state, revm-database-interface
+
+## [9.0.1](https://github.com/bluealloy/revm/compare/revm-database-v9.0.0...revm-database-v9.0.1) - 2025-10-15
+
+### Other
+
+- updated the following local packages: revm-primitives, revm-bytecode, revm-state, revm-database-interface
+
+## [9.0.0](https://github.com/bluealloy/revm/compare/revm-database-v8.0.0...revm-database-v9.0.0) - 2025-10-09
+
+### Other
+
+- *(database)* optimize BTreeMap lookup in BundleState::build() ([#3068](https://github.com/bluealloy/revm/pull/3068))
+- *(database)* remove unnecessary Send+Sync bounds from TryDatabaseCommit for Arc ([#3063](https://github.com/bluealloy/revm/pull/3063))
+- remove deprecated methods ([#3050](https://github.com/bluealloy/revm/pull/3050))
+
+## [8.0.0](https://github.com/bluealloy/revm/compare/revm-database-v7.0.5...revm-database-v8.0.0) - 2025-10-07
+
+### Fixed
+
+- Apply spelling corrections from PRs #2926, #2915, #2908 ([#2978](https://github.com/bluealloy/revm/pull/2978))
+
+### Other
+
+- add boundless ([#3043](https://github.com/bluealloy/revm/pull/3043))
+- *(database)* extract duplicate test balance constants ([#3017](https://github.com/bluealloy/revm/pull/3017))
+- pretty print state in revme statetest ([#2979](https://github.com/bluealloy/revm/pull/2979))
+- *(database)* avoid panic by conditionally using block_in_place ([#2927](https://github.com/bluealloy/revm/pull/2927))
+- add SECURITY.md ([#2956](https://github.com/bluealloy/revm/pull/2956))
+
+## [7.0.5](https://github.com/bluealloy/revm/compare/revm-database-v7.0.4...revm-database-v7.0.5) - 2025-08-23
+
+### Other
+
+- *(database)* remove unused dependencies ([#2885](https://github.com/bluealloy/revm/pull/2885))
+- add AccountStatus unit test ([#2869](https://github.com/bluealloy/revm/pull/2869))
+
+## [7.0.4](https://github.com/bluealloy/revm/compare/revm-database-v7.0.3...revm-database-v7.0.4) - 2025-08-12
+
+### Other
+
+- use mem::take ([#2870](https://github.com/bluealloy/revm/pull/2870))
+- small performance and safety improvements ([#2868](https://github.com/bluealloy/revm/pull/2868))
+- use HashMap::or_insert_with lazily compute ([#2864](https://github.com/bluealloy/revm/pull/2864))
+
+## [7.0.3](https://github.com/bluealloy/revm/compare/revm-database-v7.0.2...revm-database-v7.0.3) - 2025-08-06
+
+### Other
+
+- update README.md ([#2842](https://github.com/bluealloy/revm/pull/2842))
+- add rust-version and note about MSRV ([#2789](https://github.com/bluealloy/revm/pull/2789))
+
+## [7.0.2](https://github.com/bluealloy/revm/compare/revm-database-v7.0.1...revm-database-v7.0.2) - 2025-07-23
+
+### Other
+
+- updated the following local packages: revm-primitives, revm-bytecode, revm-database-interface, revm-state
+
+## [7.0.1](https://github.com/bluealloy/revm/compare/revm-database-v7.0.0...revm-database-v7.0.1) - 2025-07-03
+
+### Other
+
+- updated the following local packages: revm-bytecode, revm-state, revm-database-interface
+
+## [7.0.0](https://github.com/bluealloy/revm/compare/revm-database-v6.0.0...revm-database-v7.0.0) - 2025-06-30
+
+### Other
+
+- updated the following local packages: revm-bytecode, revm-state, revm-database-interface
+
+## [6.0.0](https://github.com/bluealloy/revm/compare/revm-database-v5.0.0...revm-database-v6.0.0) - 2025-06-19
+
+### Added
+
+- *(precompile)* rug/gmp-based modexp ([#2596](https://github.com/bluealloy/revm/pull/2596))
+
+### Fixed
+
+- change account state to None if NotExisting on insert_account_info ([#2630](https://github.com/bluealloy/revm/pull/2630))
+
+### Other
+
+- lints for revm-database ([#2639](https://github.com/bluealloy/revm/pull/2639))
+- bump alloydb test ([#2640](https://github.com/bluealloy/revm/pull/2640))
+
+## [5.0.0](https://github.com/bluealloy/revm/compare/revm-database-v4.0.1...revm-database-v5.0.0) - 2025-06-06
+
+### Added
+
+- *(database)* Implement DatabaseRef for State ([#2570](https://github.com/bluealloy/revm/pull/2570))
+- added TxEnv::new_bench() add util function ([#2556](https://github.com/bluealloy/revm/pull/2556))
+- transact multi tx ([#2517](https://github.com/bluealloy/revm/pull/2517))
+
+### Other
+
+- Avoid clone before converting ref BundleAccount to CacheAccount ([#2574](https://github.com/bluealloy/revm/pull/2574))
+- *(docs)* add lints to database-interface and op-revm crates ([#2568](https://github.com/bluealloy/revm/pull/2568))
+
+## [4.0.1](https://github.com/bluealloy/revm/compare/revm-database-v4.0.0...revm-database-v4.0.1) - 2025-05-22
+
+### Other
+
+- bump alloy libs ([#2533](https://github.com/bluealloy/revm/pull/2533))
+- make crates.io version badge clickable ([#2526](https://github.com/bluealloy/revm/pull/2526))
+- Storage Types Alias ([#2461](https://github.com/bluealloy/revm/pull/2461))
+
+
+## [4.0.0](https://github.com/bluealloy/revm/compare/revm-database-v3.1.0...revm-database-v4.0.0) - 2025-05-07
+
+Dependency bump
+
+## [3.1.0](https://github.com/bluealloy/revm/compare/revm-database-v3.0.0...revm-database-v3.1.0) - 2025-05-07
+
+### Added
+
+- *(database)* re-export all public items from alloydb when feature … ([#2443](https://github.com/bluealloy/revm/pull/2443))
+
+### Other
+
+- copy edit The Book ([#2463](https://github.com/bluealloy/revm/pull/2463))
+- bump dependency version ([#2431](https://github.com/bluealloy/revm/pull/2431))
+- fixed broken link ([#2421](https://github.com/bluealloy/revm/pull/2421))
+- remove alloy-sol-types deps ([#2411](https://github.com/bluealloy/revm/pull/2411))
+
+## [3.0.0](https://github.com/bluealloy/revm/compare/revm-database-v2.0.0...revm-database-v3.0.0) - 2025-04-09
+
+### Other
+
+- clean unsed indicatif ([#2379](https://github.com/bluealloy/revm/pull/2379))
+- add 0x prefix to b256! and address! calls ([#2345](https://github.com/bluealloy/revm/pull/2345))
+- *(database)* remove auto_impl dependency ([#2344](https://github.com/bluealloy/revm/pull/2344))
+
 ## [2.0.0](https://github.com/bluealloy/revm/compare/revm-database-v1.0.0...revm-database-v2.0.0) - 2025-03-28
 
 ### Other

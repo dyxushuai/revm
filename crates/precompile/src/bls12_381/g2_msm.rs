@@ -1,16 +1,20 @@
-use super::crypto_backend::{encode_g2_point, p2_msm, read_g2, read_scalar};
-use super::utils::remove_g2_padding;
-use crate::bls12_381_const::{
-    DISCOUNT_TABLE_G2_MSM, G2_MSM_ADDRESS, G2_MSM_BASE_GAS_FEE, G2_MSM_INPUT_LENGTH,
-    PADDED_G2_LENGTH, SCALAR_LENGTH,
+//! BLS12-381 G2 msm precompile. More details in [`g2_msm`]
+use super::utils::{pad_g2_point, remove_g2_padding};
+use crate::{
+    bls12_381_const::{
+        DISCOUNT_TABLE_G2_MSM, G2_MSM_ADDRESS, G2_MSM_BASE_GAS_FEE, G2_MSM_INPUT_LENGTH,
+        PADDED_G2_LENGTH, SCALAR_LENGTH,
+    },
+    bls12_381_utils::msm_required_gas,
+    crypto, eth_precompile_fn, EthPrecompileOutput, EthPrecompileResult, Precompile,
+    PrecompileHalt, PrecompileId,
 };
-use crate::bls12_381_utils::msm_required_gas;
-use crate::{PrecompileError, PrecompileOutput, PrecompileResult, PrecompileWithAddress};
-use primitives::Bytes;
-use std::vec::Vec;
+
+eth_precompile_fn!(g2_msm_precompile, g2_msm);
 
 /// [EIP-2537](https://eips.ethereum.org/EIPS/eip-2537#specification) BLS12_G2MSM precompile.
-pub const PRECOMPILE: PrecompileWithAddress = PrecompileWithAddress(G2_MSM_ADDRESS, g2_msm);
+pub const PRECOMPILE: Precompile =
+    Precompile::new(PrecompileId::Bls12G2Msm, G2_MSM_ADDRESS, g2_msm_precompile);
 
 /// Implements EIP-2537 G2MSM precompile.
 /// G2 multi-scalar-multiplication call expects `288*k` bytes as an input that is interpreted
@@ -20,68 +24,33 @@ pub const PRECOMPILE: PrecompileWithAddress = PrecompileWithAddress(G2_MSM_ADDRE
 /// Output is an encoding of multi-scalar-multiplication operation result - single G2
 /// point (`256` bytes).
 /// See also: <https://eips.ethereum.org/EIPS/eip-2537#abi-for-g2-multiexponentiation>
-pub(super) fn g2_msm(input: &Bytes, gas_limit: u64) -> PrecompileResult {
+pub fn g2_msm(input: &[u8], gas_limit: u64) -> EthPrecompileResult {
     let input_len = input.len();
-    if input_len == 0 || input_len % G2_MSM_INPUT_LENGTH != 0 {
-        return Err(PrecompileError::Other(format!(
-            "G2MSM input length should be multiple of {}, was {}",
-            G2_MSM_INPUT_LENGTH, input_len
-        )));
+    if input_len == 0 || !input_len.is_multiple_of(G2_MSM_INPUT_LENGTH) {
+        return Err(PrecompileHalt::Bls12381G2MsmInputLength);
     }
 
-    let k = input_len / G2_MSM_INPUT_LENGTH;
+    let input_chunks = input.as_chunks::<G2_MSM_INPUT_LENGTH>().0;
+    let k = input_chunks.len();
     let required_gas = msm_required_gas(k, &DISCOUNT_TABLE_G2_MSM, G2_MSM_BASE_GAS_FEE);
     if required_gas > gas_limit {
-        return Err(PrecompileError::OutOfGas);
+        return Err(PrecompileHalt::OutOfGas);
     }
 
-    let mut g2_points: Vec<_> = Vec::with_capacity(k);
-    let mut scalars = Vec::with_capacity(k);
-    for i in 0..k {
-        let encoded_g2_element =
-            &input[i * G2_MSM_INPUT_LENGTH..i * G2_MSM_INPUT_LENGTH + PADDED_G2_LENGTH];
-        let encoded_scalar = &input[i * G2_MSM_INPUT_LENGTH + PADDED_G2_LENGTH
-            ..i * G2_MSM_INPUT_LENGTH + PADDED_G2_LENGTH + SCALAR_LENGTH];
+    let mut valid_pairs_iter = input_chunks.iter().map(|pair| {
+        let (padded_g2, scalar_bytes) = pair.split_at(PADDED_G2_LENGTH);
 
-        // Filter out points infinity as an optimization, since it is a no-op.
-        // Note: Previously, points were being batch converted from Jacobian to Affine. In `blst`, this would essentially,
-        // zero out all of the points. Since all points are in affine, this bug is avoided.
-        if encoded_g2_element.iter().all(|i| *i == 0) {
-            continue;
-        }
+        // Remove padding from G2 point - this validates padding format
+        let [x_0, x_1, y_0, y_1] = remove_g2_padding(padded_g2)?;
+        let scalar_array: [u8; SCALAR_LENGTH] = scalar_bytes.try_into().unwrap();
 
-        let [a_x_0, a_x_1, a_y_0, a_y_1] = remove_g2_padding(encoded_g2_element)?;
+        Ok(((*x_0, *x_1, *y_0, *y_1), scalar_array))
+    });
 
-        // NB: Scalar multiplications, MSMs and pairings MUST perform a subgroup check.
-        //
-        // So we set the subgroup_check flag to `true`
-        let p0_aff = read_g2(a_x_0, a_x_1, a_y_0, a_y_1)?;
+    let unpadded_result = crypto().bls12_381_g2_msm(&mut valid_pairs_iter)?;
 
-        // If the scalar is zero, then this is a no-op.
-        //
-        // Note: This check is made after checking that g2 is valid.
-        // this is because we want the precompile to error when
-        // G2 is invalid, even if the scalar is zero.
-        if encoded_scalar.iter().all(|i| *i == 0) {
-            continue;
-        }
+    // Pad the result for EVM compatibility
+    let padded_result = pad_g2_point(&unpadded_result);
 
-        // Convert affine point to Jacobian coordinates using our helper function
-        g2_points.push(p0_aff);
-        scalars.push(read_scalar(encoded_scalar)?);
-    }
-
-    // Return infinity point if all points are infinity
-    if g2_points.is_empty() {
-        return Ok(PrecompileOutput::new(
-            required_gas,
-            [0; PADDED_G2_LENGTH].into(),
-        ));
-    }
-
-    // Perform multi-scalar multiplication using the safe wrapper
-    let multiexp_aff = p2_msm(g2_points, scalars);
-
-    let out = encode_g2_point(&multiexp_aff);
-    Ok(PrecompileOutput::new(required_gas, out.into()))
+    Ok(EthPrecompileOutput::new(required_gas, padded_result.into()))
 }

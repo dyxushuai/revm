@@ -1,6 +1,8 @@
+//! Transaction trait [`Transaction`] and associated types.
 mod alloy_types;
 pub mod eip2930;
 pub mod eip7702;
+mod either;
 pub mod transaction_type;
 
 pub use alloy_types::{
@@ -11,24 +13,32 @@ pub use eip2930::AccessListItemTr;
 pub use eip7702::AuthorizationTr;
 pub use transaction_type::TransactionType;
 
+use crate::result::InvalidTransaction;
 use auto_impl::auto_impl;
-use core::cmp::min;
-use core::fmt::Debug;
+use core::{cmp::min, fmt::Debug};
 use primitives::{eip4844::GAS_PER_BLOB, Address, Bytes, TxKind, B256, U256};
+use std::boxed::Box;
 
 /// Transaction validity error types.
 pub trait TransactionError: Debug + core::error::Error {}
 
 /// Main Transaction trait that abstracts and specifies all transaction currently supported by Ethereum
 ///
-/// Access to any associated type is gaited behind [`tx_type`][Transaction::tx_type] function.
+/// Access to any associated type is gated behind [`tx_type`][Transaction::tx_type] function.
 ///
 /// It can be extended to support new transaction types and only transaction types can be
 /// deprecated by not returning tx_type.
 #[auto_impl(&, Box, Arc, Rc)]
 pub trait Transaction {
-    type AccessListItem: AccessListItemTr;
-    type Authorization: AuthorizationTr;
+    /// EIP-2930 Access list item type.
+    type AccessListItem<'a>: AccessListItemTr
+    where
+        Self: 'a;
+
+    /// EIP-7702 Authorization type.
+    type Authorization<'a>: AuthorizationTr
+    where
+        Self: 'a;
 
     /// Returns the transaction type.
     ///
@@ -45,7 +55,7 @@ pub trait Transaction {
     /// Note : Common field for all transactions.
     fn gas_limit(&self) -> u64;
 
-    /// The value sent to the receiver of [`TxKind::Call`][primitives::TxKind::Call].
+    /// The value sent to the receiver of [`TxKind::Call`].
     ///
     /// Note : Common field for all transactions.
     fn value(&self) -> U256;
@@ -79,7 +89,7 @@ pub trait Transaction {
     /// Access list for the transaction.
     ///
     /// Introduced in EIP-2930.
-    fn access_list(&self) -> Option<impl Iterator<Item = &Self::AccessListItem>>;
+    fn access_list(&self) -> Option<impl Iterator<Item = Self::AccessListItem<'_>>>;
 
     /// Returns vector of fixed size hash(32 bytes)
     ///
@@ -105,9 +115,7 @@ pub trait Transaction {
     /// See EIP-4844:
     /// <https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md#execution-layer-validation>
     fn calc_max_data_fee(&self) -> U256 {
-        let blob_gas = U256::from(self.total_blob_gas());
-        let max_blob_fee = U256::from(self.max_fee_per_blob_gas());
-        max_blob_fee.saturating_mul(blob_gas)
+        U256::from((self.total_blob_gas() as u128).saturating_mul(self.max_fee_per_blob_gas()))
     }
 
     /// Returns length of the authorization list.
@@ -123,7 +131,7 @@ pub trait Transaction {
     /// Set EOA account code for one transaction
     ///
     /// [EIP-Set EOA account code for one transaction](https://eips.ethereum.org/EIPS/eip-7702)
-    fn authorization_list(&self) -> impl Iterator<Item = &Self::Authorization>;
+    fn authorization_list(&self) -> impl Iterator<Item = Self::Authorization<'_>>;
 
     /// Returns maximum fee that can be paid for the transaction.
     fn max_fee_per_gas(&self) -> u128 {
@@ -150,11 +158,89 @@ pub trait Transaction {
         };
         min(max_price, base_fee.saturating_add(max_priority_fee))
     }
-}
 
-#[auto_impl(&, &mut, Box, Arc)]
-pub trait TransactionGetter {
-    type Transaction: Transaction;
+    /// Returns the maximum balance that can be spent by the transaction.
+    ///
+    /// Return U256 or error if all values overflow U256 number.
+    fn max_balance_spending(&self) -> Result<U256, InvalidTransaction> {
+        // gas_limit * max_fee + value + additional_gas_cost
+        let mut max_balance_spending = (self.gas_limit() as u128)
+            .checked_mul(self.max_fee_per_gas())
+            .and_then(|gas_cost| U256::from(gas_cost).checked_add(self.value()))
+            .ok_or(InvalidTransaction::OverflowPaymentInTransaction)?;
 
-    fn tx(&self) -> &Self::Transaction;
+        // add blob fee
+        if self.tx_type() == TransactionType::Eip4844 {
+            let data_fee = self.calc_max_data_fee();
+            max_balance_spending = max_balance_spending
+                .checked_add(data_fee)
+                .ok_or(InvalidTransaction::OverflowPaymentInTransaction)?;
+        }
+        Ok(max_balance_spending)
+    }
+
+    /// Checks if the caller has enough balance to cover the maximum balance spending of this transaction.
+    ///
+    /// Internally calls [`Self::max_balance_spending`] and checks if the balance is enough.
+    #[inline]
+    fn ensure_enough_balance(&self, balance: U256) -> Result<(), InvalidTransaction> {
+        let max_balance_spending = self.max_balance_spending()?;
+        if max_balance_spending > balance {
+            return Err(InvalidTransaction::LackOfFundForMaxFee {
+                fee: Box::new(max_balance_spending),
+                balance: Box::new(balance),
+            });
+        }
+        Ok(())
+    }
+
+    /// Returns the effective balance that is going to be spent that depends on base_fee
+    /// Multiplication for gas are done in u128 type (saturated) and value is added as U256 type.
+    ///
+    /// It is calculated as `tx.effective_gas_price * tx.gas_limit + tx.value`. Additionally adding
+    /// `blob_price * tx.total_blob_gas` blob fee if transaction is EIP-4844.
+    ///
+    /// # Reason
+    ///
+    /// This is done for performance reasons and it is known to be safe as there is no more that u128::MAX value of eth in existence.
+    ///
+    /// This is always strictly less than [`Self::max_balance_spending`].
+    ///
+    /// Return U256 or error if all values overflow U256 number.
+    #[inline]
+    fn effective_balance_spending(
+        &self,
+        base_fee: u128,
+        blob_price: u128,
+    ) -> Result<U256, InvalidTransaction> {
+        // gas_limit * max_fee + value + additional_gas_cost
+        let mut effective_balance_spending = (self.gas_limit() as u128)
+            .checked_mul(self.effective_gas_price(base_fee))
+            .and_then(|gas_cost| U256::from(gas_cost).checked_add(self.value()))
+            .ok_or(InvalidTransaction::OverflowPaymentInTransaction)?;
+
+        // add blob fee
+        if self.tx_type() == TransactionType::Eip4844 {
+            let blob_gas = self.total_blob_gas() as u128;
+            effective_balance_spending = effective_balance_spending
+                .checked_add(U256::from(blob_price.saturating_mul(blob_gas)))
+                .ok_or(InvalidTransaction::OverflowPaymentInTransaction)?;
+        }
+
+        Ok(effective_balance_spending)
+    }
+
+    /// Returns the effective balance calculated with [`Self::effective_balance_spending`] but without the value.
+    ///
+    /// Effective balance is always strictly less than [`Self::max_balance_spending`].
+    ///
+    /// This functions returns `tx.effective_gas_price * tx.gas_limit + blob_price * tx.total_blob_gas`.
+    #[inline]
+    fn gas_balance_spending(
+        &self,
+        base_fee: u128,
+        blob_price: u128,
+    ) -> Result<U256, InvalidTransaction> {
+        Ok(self.effective_balance_spending(base_fee, blob_price)? - self.value())
+    }
 }

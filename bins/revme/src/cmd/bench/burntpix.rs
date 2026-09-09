@@ -8,10 +8,11 @@ use static_data::{
 };
 
 use alloy_sol_types::{sol, SolCall};
-use database::{CacheDB, BENCH_CALLER};
 use revm::{
+    context::TxEnv,
+    database::{CacheDB, BENCH_CALLER},
     database_interface::EmptyDB,
-    primitives::{hex, keccak256, Address, Bytes, TxKind, B256, U256},
+    primitives::{hex, keccak256, Address, Bytes, StorageKey, StorageValue, TxKind, B256, U256},
     state::{AccountInfo, Bytecode},
     Context, ExecuteEvm, MainBuilder, MainContext,
 };
@@ -36,18 +37,26 @@ pub fn run(criterion: &mut Criterion) {
 
     let mut evm = Context::mainnet()
         .with_db(db)
-        .modify_tx_chained(|tx| {
-            tx.caller = BENCH_CALLER;
-            tx.kind = TxKind::Call(BURNTPIX_MAIN_ADDRESS);
-            tx.data = run_call_data.clone().into();
-            tx.gas_limit = u64::MAX;
+        .modify_cfg_chained(|c| {
+            c.disable_nonce_check = true;
+            c.tx_gas_limit_cap = Some(u64::MAX);
         })
         .build_mainnet();
 
+    let tx = TxEnv::builder()
+        .caller(BENCH_CALLER)
+        .kind(TxKind::Call(BURNTPIX_MAIN_ADDRESS))
+        .data(run_call_data.into())
+        .gas_limit(u64::MAX)
+        .build()
+        .unwrap();
+
     criterion.bench_function("burntpix", |b| {
-        b.iter(|| {
-            evm.replay().unwrap();
-        })
+        b.iter_batched(
+            || tx.clone(),
+            |input| evm.transact_one(input).unwrap(),
+            criterion::BatchSize::SmallInput,
+        );
     });
 
     //Collects the data and uses it to generate the svg after running the benchmark
@@ -86,7 +95,7 @@ pub fn svg(filename: String, svg_data: &[u8]) -> Result<(), Box<dyn Error>> {
     let svg_dir = current_dir.join("burntpix").join("svgs");
     std::fs::create_dir_all(&svg_dir)?;
 
-    let file_path = svg_dir.join(format!("{}.svg", filename));
+    let file_path = svg_dir.join(format!("{filename}.svg"));
     let mut file = File::create(file_path)?;
     file.write_all(svg_data)?;
 
@@ -96,16 +105,19 @@ pub fn svg(filename: String, svg_data: &[u8]) -> Result<(), Box<dyn Error>> {
 const DEFAULT_SEED: &str = "0";
 const DEFAULT_ITERATIONS: &str = "0x4E20"; // 20_000 iterations
 fn try_init_env_vars() -> Result<(u32, U256), Box<dyn Error>> {
-    let seed_from_env = std::env::var("SEED").unwrap_or(DEFAULT_SEED.to_string());
+    // Use lazy default to avoid unnecessary allocation when env is set
+    let seed_from_env = std::env::var("SEED").unwrap_or_else(|_| DEFAULT_SEED.to_string());
     let seed: u32 = try_from_hex_to_u32(&seed_from_env)?;
-    let iterations_from_env = std::env::var("ITERATIONS").unwrap_or(DEFAULT_ITERATIONS.to_string());
+    // Use lazy default to avoid unnecessary allocation when env is set
+    let iterations_from_env =
+        std::env::var("ITERATIONS").unwrap_or_else(|_| DEFAULT_ITERATIONS.to_string());
     let iterations = U256::from_str(&iterations_from_env)?;
     Ok((seed, iterations))
 }
 
 fn try_from_hex_to_u32(hex: &str) -> Result<u32, Box<dyn Error>> {
     let trimmed = hex.strip_prefix("0x").unwrap_or(hex);
-    u32::from_str_radix(trimmed, 16).map_err(|e| format!("Failed to parse hex: {}", e).into())
+    u32::from_str_radix(trimmed, 16).map_err(|e| format!("Failed to parse hex: {e}").into())
 }
 
 fn insert_account_info(cache_db: &mut CacheDB<EmptyDB>, addr: Address, code: &str) {
@@ -135,24 +147,24 @@ fn init_db() -> CacheDB<EmptyDB> {
     cache_db
         .insert_account_storage(
             BURNTPIX_MAIN_ADDRESS,
-            U256::from(0),
-            U256::from_be_bytes(*STORAGE_ZERO),
+            StorageKey::from(0),
+            StorageValue::from_be_bytes(*STORAGE_ZERO),
         )
         .unwrap();
 
     cache_db
         .insert_account_storage(
             BURNTPIX_MAIN_ADDRESS,
-            U256::from(1),
-            U256::from_be_bytes(*STORAGE_ONE),
+            StorageKey::from(1),
+            StorageValue::from_be_bytes(*STORAGE_ONE),
         )
         .unwrap();
 
     cache_db
         .insert_account_storage(
             BURNTPIX_MAIN_ADDRESS,
-            U256::from(2),
-            U256::from_be_bytes(*STORAGE_TWO),
+            StorageKey::from(2),
+            StorageValue::from_be_bytes(*STORAGE_TWO),
         )
         .unwrap();
 

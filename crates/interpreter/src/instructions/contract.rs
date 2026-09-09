@@ -1,641 +1,287 @@
 mod call_helpers;
 
-pub use call_helpers::{calc_call_gas, get_memory_input_and_out_ranges, resize_memory};
+pub use call_helpers::{
+    get_memory_input_and_out_ranges, load_acc_and_calc_gas, load_account_delegated,
+    load_account_delegated_handle_error, resize_memory,
+};
 
 use crate::{
-    gas::{self, cost_per_word, EOF_CREATE_GAS, KECCAK256WORD, MIN_CALLEE_GAS},
     instructions::utility::IntoAddress,
-    interpreter::Interpreter,
     interpreter_action::FrameInput,
     interpreter_types::{
-        EofContainer, Immediates, InputsTr, InterpreterTypes, Jumps, LoopControl, MemoryTr,
-        ReturnData, RuntimeFlag, StackTr,
+        InputsTr, InterpreterTypes as ITy, LoopControl, MemoryTr, ReturnData, RuntimeFlag, StackTr,
     },
-    CallInputs, CallScheme, CallValue, CreateInputs, EOFCreateInputs, Host, InstructionResult,
-    InterpreterAction, InterpreterResult,
+    CallInput, CallInputs, CallScheme, CallValue, CreateInputs, Host,
+    InstructionExecResult as Result, InstructionResult, InterpreterAction,
 };
-use bytecode::eof::{Eof, EofHeader};
 use context_interface::CreateScheme;
-use core::cmp::max;
-use primitives::{hardfork::SpecId, keccak256, Address, Bytes, B256, U256};
+use primitives::{constants::CALL_STACK_LIMIT, hardfork::SpecId, Bytes, U256};
 use std::boxed::Box;
 
-/// EOF Create instruction
-pub fn eofcreate<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    _host: &mut H,
-) {
-    require_eof!(interpreter);
-    require_non_staticcall!(interpreter);
-    gas!(interpreter, EOF_CREATE_GAS);
-    let initcontainer_index = interpreter.bytecode.read_u8();
+use crate::InstructionContext as Ictx;
 
-    popn!([value, salt, data_offset, data_size], interpreter);
-
-    let container = interpreter
-        .bytecode
-        .eof_container(initcontainer_index as usize)
-        .expect("valid container")
-        .clone();
-
-    // Resize memory and get return range.
-    let Some(input_range) = resize_memory(interpreter, data_offset, data_size) else {
-        return;
-    };
-
-    let input = if !input_range.is_empty() {
-        interpreter.memory.slice(input_range).to_vec().into()
-    } else {
-        Bytes::new()
-    };
-
-    let eof = Eof::decode(container.clone()).expect("Subcontainer is verified");
-
-    if !eof.body.is_data_filled {
-        // Should be always false as it is verified by eof verification.
-        panic!("Panic if data section is not full");
-    }
-
-    // Deduct gas for hash that is needed to calculate address.
-    gas_or_fail!(interpreter, cost_per_word(container.len(), KECCAK256WORD));
-
-    let created_address = interpreter
-        .input
-        .target_address()
-        .create2(salt.to_be_bytes(), keccak256(container));
-
-    let gas_limit = interpreter.control.gas().remaining_63_of_64_parts();
-    gas!(interpreter, gas_limit);
-    // Send container for execution container is preverified.
-    interpreter.control.set_next_action(
-        InterpreterAction::NewFrame(FrameInput::EOFCreate(Box::new(
-            EOFCreateInputs::new_opcode(
-                interpreter.input.target_address(),
-                created_address,
-                value,
-                eof,
-                gas_limit,
-                input,
-            ),
-        ))),
-        InstructionResult::CallOrCreate,
-    );
-
-    interpreter.bytecode.relative_jump(1);
-}
-
-pub fn return_contract<H: Host + ?Sized>(
-    interpreter: &mut Interpreter<impl InterpreterTypes>,
-    _host: &mut H,
-) {
-    if !interpreter.runtime_flag.is_eof_init() {
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::ReturnContractInNotInitEOF);
-        return;
-    }
-    let deploy_container_index = interpreter.bytecode.read_u8();
-    popn!([aux_data_offset, aux_data_size], interpreter);
-    let aux_data_size = as_usize_or_fail!(interpreter, aux_data_size);
-    let container = interpreter
-        .bytecode
-        .eof_container(deploy_container_index as usize)
-        .expect("valid container")
-        .clone();
-
-    // Convert to EOF so we can check data section size.
-    let (eof_header, _) = EofHeader::decode(&container).expect("valid EOF header");
-
-    let static_aux_size = eof_header.eof_size() - container.len();
-
-    // Important: Offset must be ignored if len is zeros
-    let mut output = if aux_data_size != 0 {
-        let aux_data_offset = as_usize_or_fail!(interpreter, aux_data_offset);
-        resize_memory!(interpreter, aux_data_offset, aux_data_size);
-
-        let aux_slice = interpreter.memory.slice_len(aux_data_offset, aux_data_size);
-
-        [&container, aux_slice.as_ref()].concat()
-    } else {
-        container.to_vec()
-    };
-
-    // `data_size - static_aux_size` give us current data `container` size.
-    // And with `aux_slice` len we can calculate new data size.
-    let new_data_size = eof_header.data_size as usize - static_aux_size + aux_data_size;
-    if new_data_size > 0xFFFF {
-        // Aux data is too big
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::EofAuxDataOverflow);
-        return;
-    }
-    if new_data_size < eof_header.data_size as usize {
-        // Aux data is too small
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::EofAuxDataTooSmall);
-        return;
-    }
-    let new_data_size = (new_data_size as u16).to_be_bytes();
-
-    // Set new data size in eof bytes as we know exact index.
-    output[eof_header.data_size_raw_i()..][..2].clone_from_slice(&new_data_size);
-    let output: Bytes = output.into();
-
-    let result = InstructionResult::ReturnContract;
-    let gas = *interpreter.control.gas();
-    interpreter.control.set_next_action(
-        crate::InterpreterAction::Return {
-            result: InterpreterResult {
-                output,
-                gas,
-                result,
-            },
-        },
-        result,
-    );
-}
-
-pub fn extcall_input(interpreter: &mut Interpreter<impl InterpreterTypes>) -> Option<Bytes> {
-    popn!([input_offset, input_size], interpreter, None);
-    let return_memory_offset = resize_memory(interpreter, input_offset, input_size)?;
-
-    if return_memory_offset.is_empty() {
-        return Some(Bytes::new());
-    }
-
-    Some(Bytes::copy_from_slice(
-        interpreter.memory.slice(return_memory_offset).as_ref(),
-    ))
-}
-
-pub fn extcall_gas_calc<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    host: &mut H,
-    target: Address,
-    transfers_value: bool,
-) -> Option<u64> {
-    let Some(account_load) = host.load_account_delegated(target) else {
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::FatalExternalError);
-        return None;
-    };
-
-    // account_load.is_empty will be accounted if there is transfer value
-    // Berlin can be hardcoded as extcall came after berlin.
-    let call_cost = gas::call_cost(
-        interpreter.runtime_flag.spec_id(),
-        transfers_value,
-        account_load,
-    );
-    gas!(interpreter, call_cost, None);
-
-    // Calculate the gas available to callee as caller’s
-    // remaining gas reduced by max(ceil(gas/64), MIN_RETAINED_GAS) (MIN_RETAINED_GAS is 5000).
-    let gas_reduce = max(interpreter.control.gas().remaining() / 64, 5000);
-    let gas_limit = interpreter
-        .control
-        .gas()
-        .remaining()
-        .saturating_sub(gas_reduce);
-
-    // The MIN_CALLEE_GAS rule is a replacement for stipend:
-    // it simplifies the reasoning about the gas costs and is
-    // applied uniformly for all introduced EXT*CALL instructions.
-    //
-    // If Gas available to callee is less than MIN_CALLEE_GAS trigger light failure (Same as Revert).
-    if gas_limit < MIN_CALLEE_GAS {
-        // Push 1 to stack to indicate that call light failed.
-        // It is safe to ignore stack overflow error as we already popped multiple values from stack.
-        let _ = interpreter.stack.push(U256::from(1));
-        interpreter.return_data.clear();
-        // Return none to continue execution.
-        return None;
-    }
-
-    gas!(interpreter, gas_limit, None);
-    Some(gas_limit)
-}
-
-/// Pop target address from stack and check if it is valid.
+/// Implements the CREATE/CREATE2 instruction.
 ///
-/// Valid address has first 12 bytes as zeroes.
-#[inline]
-pub fn pop_extcall_target_address(
-    interpreter: &mut Interpreter<impl InterpreterTypes>,
-) -> Option<Address> {
-    popn!([target_address], interpreter, None);
-    let target_address = B256::from(target_address);
-    // Check if target is left padded with zeroes.
-    if target_address[..12].iter().any(|i| *i != 0) {
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::InvalidEXTCALLTarget);
-        return None;
-    }
-    // Discard first 12 bytes.
-    Some(Address::from_word(target_address))
-}
-
-pub fn extcall<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    host: &mut H,
-) {
-    require_eof!(interpreter);
-
-    // Pop target address
-    let Some(target_address) = pop_extcall_target_address(interpreter) else {
-        return;
-    };
-
-    // Input call
-    let Some(input) = extcall_input(interpreter) else {
-        return;
-    };
-
-    popn!([value], interpreter);
-    let has_transfer = !value.is_zero();
-    if interpreter.runtime_flag.is_static() && has_transfer {
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::CallNotAllowedInsideStatic);
-        return;
-    }
-
-    let Some(gas_limit) = extcall_gas_calc(interpreter, host, target_address, has_transfer) else {
-        return;
-    };
-
-    // Call host to interact with target contract
-    interpreter.control.set_next_action(
-        InterpreterAction::NewFrame(FrameInput::Call(Box::new(CallInputs {
-            input,
-            gas_limit,
-            target_address,
-            caller: interpreter.input.target_address(),
-            bytecode_address: target_address,
-            value: CallValue::Transfer(value),
-            scheme: CallScheme::ExtCall,
-            is_static: interpreter.runtime_flag.is_static(),
-            is_eof: true,
-            return_memory_offset: 0..0,
-        }))),
-        InstructionResult::CallOrCreate,
-    );
-}
-
-pub fn extdelegatecall<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    host: &mut H,
-) {
-    require_eof!(interpreter);
-
-    // Pop target address
-    let Some(target_address) = pop_extcall_target_address(interpreter) else {
-        return;
-    };
-
-    // Input call
-    let Some(input) = extcall_input(interpreter) else {
-        return;
-    };
-
-    let Some(gas_limit) = extcall_gas_calc(interpreter, host, target_address, false) else {
-        return;
-    };
-
-    // Call host to interact with target contract
-    interpreter.control.set_next_action(
-        InterpreterAction::NewFrame(FrameInput::Call(Box::new(CallInputs {
-            input,
-            gas_limit,
-            target_address: interpreter.input.target_address(),
-            caller: interpreter.input.caller_address(),
-            bytecode_address: target_address,
-            value: CallValue::Apparent(interpreter.input.call_value()),
-            scheme: CallScheme::ExtDelegateCall,
-            is_static: interpreter.runtime_flag.is_static(),
-            is_eof: true,
-            return_memory_offset: 0..0,
-        }))),
-        InstructionResult::CallOrCreate,
-    );
-}
-
-pub fn extstaticcall<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    host: &mut H,
-) {
-    require_eof!(interpreter);
-
-    // Pop target address
-    let Some(target_address) = pop_extcall_target_address(interpreter) else {
-        return;
-    };
-
-    // Input call
-    let Some(input) = extcall_input(interpreter) else {
-        return;
-    };
-
-    let Some(gas_limit) = extcall_gas_calc(interpreter, host, target_address, false) else {
-        return;
-    };
-
-    // Call host to interact with target contract
-    interpreter.control.set_next_action(
-        InterpreterAction::NewFrame(FrameInput::Call(Box::new(CallInputs {
-            input,
-            gas_limit,
-            target_address,
-            caller: interpreter.input.target_address(),
-            bytecode_address: target_address,
-            value: CallValue::Transfer(U256::ZERO),
-            scheme: CallScheme::ExtStaticCall,
-            is_static: true,
-            is_eof: true,
-            return_memory_offset: 0..0,
-        }))),
-        InstructionResult::CallOrCreate,
-    );
-}
-
-pub fn create<WIRE: InterpreterTypes, const IS_CREATE2: bool, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    host: &mut H,
-) {
-    require_non_staticcall!(interpreter);
+/// Creates a new contract with provided bytecode.
+pub fn create<const IS_CREATE2: bool, IT: ITy, H: Host + ?Sized>(
+    context: Ictx<'_, H, IT>,
+) -> Result {
+    // Static call check is before gas charging (unlike execution-specs where it's
+    // inside generic_create). This is safe because CREATE in a static context is
+    // always an error regardless of gas accounting.
+    require_non_staticcall!(context.interpreter);
 
     // EIP-1014: Skinny CREATE2
     if IS_CREATE2 {
-        check!(interpreter, PETERSBURG);
+        check!(context.interpreter, PETERSBURG);
     }
 
-    popn!([value, code_offset, len], interpreter);
-    let len = as_usize_or_fail!(interpreter, len);
+    popn!([value, code_offset, len], context.interpreter);
+    let len = as_usize_or_fail!(context.interpreter, len);
 
     let mut code = Bytes::new();
     if len != 0 {
         // EIP-3860: Limit and meter initcode
-        if interpreter
+        if context
+            .interpreter
             .runtime_flag
             .spec_id()
             .is_enabled_in(SpecId::SHANGHAI)
         {
             // Limit is set as double of max contract bytecode size
-            if len > host.max_initcode_size() {
-                interpreter
-                    .control
-                    .set_instruction_result(InstructionResult::CreateInitCodeSizeLimit);
-                return;
+            if len > context.host.max_initcode_size() {
+                return Err(InstructionResult::CreateInitCodeSizeLimit);
             }
-            gas!(interpreter, gas::initcode_cost(len));
+            gas!(
+                context.interpreter,
+                context.host.gas_params().initcode_cost(len)
+            );
         }
 
-        let code_offset = as_usize_or_fail!(interpreter, code_offset);
-        resize_memory!(interpreter, code_offset, len);
-        code = Bytes::copy_from_slice(interpreter.memory.slice_len(code_offset, len).as_ref());
+        let code_offset = as_usize_or_fail!(context.interpreter, code_offset);
+        context
+            .interpreter
+            .resize_memory(context.host.gas_params(), code_offset, len)?;
+
+        code = Bytes::copy_from_slice(
+            context
+                .interpreter
+                .memory
+                .slice_len(code_offset, len)
+                .as_ref(),
+        );
     }
 
     // EIP-1014: Skinny CREATE2
     let scheme = if IS_CREATE2 {
-        popn!([salt], interpreter);
+        popn!([salt], context.interpreter);
         // SAFETY: `len` is reasonable in size as gas for it is already deducted.
-        gas_or_fail!(interpreter, gas::create2_cost(len));
+        gas!(
+            context.interpreter,
+            context.host.gas_params().create2_cost(len)
+        );
         CreateScheme::Create2 { salt }
     } else {
-        gas!(interpreter, gas::CREATE);
+        gas!(context.interpreter, context.host.gas_params().create_cost());
         CreateScheme::Create
     };
 
-    let mut gas_limit = interpreter.control.gas().remaining();
+    // Build the inputs before the gas split so the created address (and the
+    // CREATE2 init-code hash) is computed once and cached for frame creation.
+    let mut create_inputs = CreateInputs::new(
+        context.interpreter.input.target_address(),
+        scheme,
+        value,
+        code,
+        0,
+        0,
+    );
+
+    // State gas for account creation + contract metadata (EIP-8037).
+    if context.host.is_amsterdam_eip8037_enabled() {
+        // The charge is conditional at access, applied in
+        // the creating frame before the 63/64 split. The destination is read
+        // (and charged for) only after the pre-access checks — endowment
+        // balance, sender nonce overflow, and call depth — pass; failing those
+        // pushes 0 without touching the destination, keeping it out of the
+        // EIP-7928 block access list and the warm set.
+        let caller = create_inputs.caller();
+        let caller_info = context
+            .host
+            .load_account_info_skip_cold_load(caller, false, false)?;
+        let caller_balance = caller_info.account.balance;
+        let caller_nonce = caller_info.account.nonce;
+        if caller_balance < value
+            || caller_nonce == u64::MAX
+            || context.interpreter.input.depth() + 1 > CALL_STACK_LIMIT as usize
+        {
+            context.interpreter.return_data.clear();
+            push!(context.interpreter, U256::ZERO);
+            return Ok(());
+        }
+
+        // Single read of the destination: decides the charge by existence
+        // alone (independently of the collision outcome checked at frame
+        // creation) and adds it to the accessed addresses.
+        let created_address = create_inputs.created_address(caller_nonce);
+        let destination_alive = !context
+            .host
+            .load_account_info_skip_cold_load(created_address, false, false)?
+            .is_empty;
+        if !destination_alive {
+            state_gas!(
+                context.interpreter,
+                context.host.gas_params().create_state_gas()
+            );
+            create_inputs.set_charged_create_state_gas(true);
+        }
+    }
+
+    let mut gas_limit = context.interpreter.gas.remaining();
 
     // EIP-150: Gas cost changes for IO-heavy operations
-    if interpreter
+    if context
+        .interpreter
         .runtime_flag
         .spec_id()
         .is_enabled_in(SpecId::TANGERINE)
     {
         // Take remaining gas and deduce l64 part of it.
-        gas_limit -= gas_limit / 64
+        gas_limit = context.host.gas_params().call_stipend_reduction(gas_limit);
     }
-    gas!(interpreter, gas_limit);
+    gas!(context.interpreter, gas_limit);
 
-    // Call host to interact with target contract
-    interpreter.control.set_next_action(
-        InterpreterAction::NewFrame(FrameInput::Create(Box::new(CreateInputs {
-            caller: interpreter.input.target_address(),
-            scheme,
-            value,
-            init_code: code,
-            gas_limit,
-        }))),
-        InstructionResult::CallOrCreate,
-    );
+    create_inputs.set_gas_limit(gas_limit);
+    create_inputs.set_reservoir(context.interpreter.gas.reservoir());
+    context
+        .interpreter
+        .bytecode
+        .set_action(InterpreterAction::NewFrame(FrameInput::Create(Box::new(
+            create_inputs,
+        ))));
+    Err(InstructionResult::Suspend)
 }
 
-pub fn call<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    host: &mut H,
-) {
-    popn!([local_gas_limit, to, value], interpreter);
+/// Implements the CALL, CALLCODE, DELEGATECALL, and STATICCALL instructions.
+pub fn call<const KIND: u8, IT: ITy, H: Host + ?Sized>(mut context: Ictx<'_, H, IT>) -> Result {
+    use bytecode::opcode::{CALL, CALLCODE, DELEGATECALL, STATICCALL};
+
+    if !matches!(KIND, CALL | CALLCODE | DELEGATECALL | STATICCALL) {
+        unreachable!("invalid call kind")
+    }
+
+    if KIND == DELEGATECALL {
+        check!(context.interpreter, HOMESTEAD);
+    } else if KIND == STATICCALL {
+        check!(context.interpreter, BYZANTIUM);
+    }
+
+    let (local_gas_limit, to, value) = if matches!(KIND, CALL | CALLCODE) {
+        popn!([local_gas_limit, to, value], context.interpreter);
+        (local_gas_limit, to, value)
+    } else {
+        popn!([local_gas_limit, to], context.interpreter);
+        (local_gas_limit, to, U256::ZERO)
+    };
     let to = to.into_address();
     // Max gas limit is not possible in real ethereum situation.
     let local_gas_limit = u64::try_from(local_gas_limit).unwrap_or(u64::MAX);
-
     let has_transfer = !value.is_zero();
-    if interpreter.runtime_flag.is_static() && has_transfer {
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::CallNotAllowedInsideStatic);
-        return;
+
+    if KIND == CALL && context.interpreter.runtime_flag.is_static() && has_transfer {
+        return Err(InstructionResult::CallNotAllowedInsideStatic);
     }
 
-    let Some((input, return_memory_offset)) = get_memory_input_and_out_ranges(interpreter) else {
-        return;
+    let (input, return_memory_offset) =
+        get_memory_input_and_out_ranges(context.interpreter, context.host.gas_params())?;
+
+    let is_call = KIND == CALL;
+    let (gas_limit, bytecode, bytecode_hash, charged_new_account_state_gas) =
+        load_acc_and_calc_gas(&mut context, to, has_transfer, is_call, local_gas_limit)?;
+
+    let target_address = if matches!(KIND, CALLCODE | DELEGATECALL) {
+        context.interpreter.input.target_address()
+    } else {
+        to
     };
-
-    let Some(account_load) = host.load_account_delegated(to) else {
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::FatalExternalError);
-        return;
+    let caller = if KIND == DELEGATECALL {
+        context.interpreter.input.caller_address()
+    } else {
+        context.interpreter.input.target_address()
     };
-
-    let Some(mut gas_limit) =
-        calc_call_gas(interpreter, account_load, has_transfer, local_gas_limit)
-    else {
-        return;
+    let value = if KIND == DELEGATECALL {
+        CallValue::Apparent(context.interpreter.input.call_value())
+    } else {
+        CallValue::Transfer(value)
     };
+    let scheme = match KIND {
+        CALL => CallScheme::Call,
+        CALLCODE => CallScheme::CallCode,
+        DELEGATECALL => CallScheme::DelegateCall,
+        STATICCALL => CallScheme::StaticCall,
+        _ => unreachable!(),
+    };
+    let is_static = context.interpreter.runtime_flag.is_static() || KIND == STATICCALL;
 
-    gas!(interpreter, gas_limit);
+    // Call host to interact with target contract
+    context
+        .interpreter
+        .bytecode
+        .set_action(InterpreterAction::NewFrame(FrameInput::Call(Box::new(
+            CallInputs {
+                input: CallInput::SharedBuffer(input),
+                gas_limit,
+                target_address,
+                caller,
+                bytecode_address: to,
+                known_bytecode: (bytecode_hash, bytecode),
+                value,
+                scheme,
+                is_static,
+                return_memory_offset,
+                reservoir: context.interpreter.gas.reservoir(),
+                charged_new_account_state_gas,
+            },
+        ))));
+    Err(InstructionResult::Suspend)
+}
 
-    // Add call stipend if there is value to be transferred.
-    if has_transfer {
-        gas_limit = gas_limit.saturating_add(gas::CALL_STIPEND);
+#[cfg(test)]
+mod tests {
+    use crate::{
+        host::DummyHost,
+        instructions::{gas_table, instruction_table},
+        interpreter::{EthInterpreter, ExtBytecode, InputsImpl, SharedMemory},
+        Interpreter, InterpreterAction,
+    };
+    use bytecode::opcode::*;
+    use bytecode::Bytecode;
+    use primitives::{constants::CALL_STACK_LIMIT, hardfork::SpecId, Bytes, U256};
+
+    #[test]
+    fn create_too_deep_pushes_zero_without_destination_access_eip8037() {
+        // EIP-8037: the depth pre-check fails in the opcode itself, pushing 0 without
+        // requesting a create frame or reading the destination account, which would
+        // otherwise leak the address into the EIP-7928 block access list.
+        let bytecode =
+            Bytecode::new_raw(Bytes::copy_from_slice(&[PUSH0, PUSH0, PUSH0, CREATE, STOP]));
+        let mut interpreter = Interpreter::<EthInterpreter>::new(
+            SharedMemory::new(),
+            ExtBytecode::new(bytecode),
+            InputsImpl {
+                depth: CALL_STACK_LIMIT as usize,
+                ..Default::default()
+            },
+            false,
+            SpecId::AMSTERDAM,
+            1_000_000,
+        );
+        let table = instruction_table::<EthInterpreter, DummyHost>();
+        let gas = gas_table();
+        let mut host = DummyHost::new(SpecId::AMSTERDAM);
+        let action = interpreter.run_plain(&table, &gas, &mut host);
+        assert!(!matches!(action, InterpreterAction::NewFrame(_)));
+        assert_eq!(interpreter.stack.len(), 1);
+        assert_eq!(interpreter.stack.data()[0], U256::ZERO);
     }
-
-    // Call host to interact with target contract
-    interpreter.control.set_next_action(
-        InterpreterAction::NewFrame(FrameInput::Call(Box::new(CallInputs {
-            input,
-            gas_limit,
-            target_address: to,
-            caller: interpreter.input.target_address(),
-            bytecode_address: to,
-            value: CallValue::Transfer(value),
-            scheme: CallScheme::Call,
-            is_static: interpreter.runtime_flag.is_static(),
-            is_eof: false,
-            return_memory_offset,
-        }))),
-        InstructionResult::CallOrCreate,
-    );
-}
-
-pub fn call_code<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    host: &mut H,
-) {
-    popn!([local_gas_limit, to, value], interpreter);
-    let to = Address::from_word(B256::from(to));
-    // Max gas limit is not possible in real ethereum situation.
-    let local_gas_limit = u64::try_from(local_gas_limit).unwrap_or(u64::MAX);
-
-    //pop!(interpreter, value);
-    let Some((input, return_memory_offset)) = get_memory_input_and_out_ranges(interpreter) else {
-        return;
-    };
-
-    let Some(mut load) = host.load_account_delegated(to) else {
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::FatalExternalError);
-        return;
-    };
-
-    // Set `is_empty` to false as we are not creating this account.
-    load.is_empty = false;
-    let Some(mut gas_limit) = calc_call_gas(interpreter, load, !value.is_zero(), local_gas_limit)
-    else {
-        return;
-    };
-
-    gas!(interpreter, gas_limit);
-
-    // Add call stipend if there is value to be transferred.
-    if !value.is_zero() {
-        gas_limit = gas_limit.saturating_add(gas::CALL_STIPEND);
-    }
-
-    // Call host to interact with target contract
-    interpreter.control.set_next_action(
-        InterpreterAction::NewFrame(FrameInput::Call(Box::new(CallInputs {
-            input,
-            gas_limit,
-            target_address: interpreter.input.target_address(),
-            caller: interpreter.input.target_address(),
-            bytecode_address: to,
-            value: CallValue::Transfer(value),
-            scheme: CallScheme::CallCode,
-            is_static: interpreter.runtime_flag.is_static(),
-            is_eof: false,
-            return_memory_offset,
-        }))),
-        InstructionResult::CallOrCreate,
-    );
-}
-
-pub fn delegate_call<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    host: &mut H,
-) {
-    check!(interpreter, HOMESTEAD);
-    popn!([local_gas_limit, to], interpreter);
-    let to = Address::from_word(B256::from(to));
-    // Max gas limit is not possible in real ethereum situation.
-    let local_gas_limit = u64::try_from(local_gas_limit).unwrap_or(u64::MAX);
-
-    let Some((input, return_memory_offset)) = get_memory_input_and_out_ranges(interpreter) else {
-        return;
-    };
-
-    let Some(mut load) = host.load_account_delegated(to) else {
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::FatalExternalError);
-        return;
-    };
-
-    // Set is_empty to false as we are not creating this account.
-    load.is_empty = false;
-    let Some(gas_limit) = calc_call_gas(interpreter, load, false, local_gas_limit) else {
-        return;
-    };
-
-    gas!(interpreter, gas_limit);
-
-    // Call host to interact with target contract
-    interpreter.control.set_next_action(
-        InterpreterAction::NewFrame(FrameInput::Call(Box::new(CallInputs {
-            input,
-            gas_limit,
-            target_address: interpreter.input.target_address(),
-            caller: interpreter.input.caller_address(),
-            bytecode_address: to,
-            value: CallValue::Apparent(interpreter.input.call_value()),
-            scheme: CallScheme::DelegateCall,
-            is_static: interpreter.runtime_flag.is_static(),
-            is_eof: false,
-            return_memory_offset,
-        }))),
-        InstructionResult::CallOrCreate,
-    );
-}
-
-pub fn static_call<WIRE: InterpreterTypes, H: Host + ?Sized>(
-    interpreter: &mut Interpreter<WIRE>,
-    host: &mut H,
-) {
-    check!(interpreter, BYZANTIUM);
-    popn!([local_gas_limit, to], interpreter);
-    let to = Address::from_word(B256::from(to));
-    // Max gas limit is not possible in real ethereum situation.
-    let local_gas_limit = u64::try_from(local_gas_limit).unwrap_or(u64::MAX);
-
-    let Some((input, return_memory_offset)) = get_memory_input_and_out_ranges(interpreter) else {
-        return;
-    };
-
-    let Some(mut load) = host.load_account_delegated(to) else {
-        interpreter
-            .control
-            .set_instruction_result(InstructionResult::FatalExternalError);
-        return;
-    };
-    // Set `is_empty` to false as we are not creating this account.
-    load.is_empty = false;
-    let Some(gas_limit) = calc_call_gas(interpreter, load, false, local_gas_limit) else {
-        return;
-    };
-    gas!(interpreter, gas_limit);
-
-    // Call host to interact with target contract
-    interpreter.control.set_next_action(
-        InterpreterAction::NewFrame(FrameInput::Call(Box::new(CallInputs {
-            input,
-            gas_limit,
-            target_address: to,
-            caller: interpreter.input.target_address(),
-            bytecode_address: to,
-            value: CallValue::Transfer(U256::ZERO),
-            scheme: CallScheme::StaticCall,
-            is_static: true,
-            is_eof: false,
-            return_memory_offset,
-        }))),
-        InstructionResult::CallOrCreate,
-    );
 }

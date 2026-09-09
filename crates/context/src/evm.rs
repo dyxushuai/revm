@@ -1,77 +1,108 @@
-use core::fmt::Debug;
-use core::ops::{Deref, DerefMut};
+//! This module contains [`Evm`] struct.
+use core::{
+    fmt::Debug,
+    ops::{Deref, DerefMut},
+};
 
-#[derive(Debug)]
-pub struct Evm<CTX, INSP, I, P> {
-    pub data: EvmData<CTX, INSP>,
-    pub instruction: I,
-    pub precompiles: P,
-}
+use context_interface::FrameStack;
 
-#[derive(Debug)]
-pub struct EvmData<CTX, INSP> {
+/// Main EVM structure that contains all data needed for execution.
+#[derive(Debug, Clone)]
+pub struct Evm<CTX, INSP, I, P, F> {
+    /// [`context_interface::ContextTr`] of the EVM it is used to fetch data from database.
     pub ctx: CTX,
+    /// Inspector of the EVM it is used to inspect the EVM.
+    /// Its trait are defined in revm-inspector crate.
     pub inspector: INSP,
+    /// Instructions provider of the EVM it is used to execute instructions.
+    /// `InstructionProvider` trait is defined in revm-handler crate.
+    pub instruction: I,
+    /// Precompile provider of the EVM it is used to execute precompiles.
+    /// `PrecompileProvider` trait is defined in revm-handler crate.
+    pub precompiles: P,
+    /// Frame that is going to be executed.
+    pub frame_stack: FrameStack<F>,
+    /// Reusable async execution stack.
+    #[cfg(feature = "asyncdb")]
+    pub async_stack: database_interface::async_db::FiberStack,
 }
 
-impl<CTX, I, P> Evm<CTX, (), I, P> {
-    pub fn new(ctx: CTX, instruction: I, precompiles: P) -> Evm<CTX, (), I, P> {
+impl<CTX, I, P, F: Default> Evm<CTX, (), I, P, F> {
+    /// Create a new EVM instance with a given context, instruction set, and precompile provider.
+    ///
+    /// Inspector will be set to `()`.
+    pub fn new(ctx: CTX, instruction: I, precompiles: P) -> Self {
         Evm {
-            data: EvmData { ctx, inspector: () },
+            ctx,
+            inspector: (),
             instruction,
             precompiles,
+            frame_stack: FrameStack::new_prealloc(8),
+            #[cfg(feature = "asyncdb")]
+            async_stack: database_interface::async_db::FiberStack::default(),
         }
     }
 }
 
-impl<CTX, I, INSP, P> Evm<CTX, INSP, I, P> {
+impl<CTX, I, INSP, P, F: Default> Evm<CTX, INSP, I, P, F> {
+    /// Create a new EVM instance with a given context, inspector, instruction set, and precompile provider.
     pub fn new_with_inspector(ctx: CTX, inspector: INSP, instruction: I, precompiles: P) -> Self {
         Evm {
-            data: EvmData { ctx, inspector },
+            ctx,
+            inspector,
             instruction,
             precompiles,
+            frame_stack: FrameStack::new_prealloc(8),
+            #[cfg(feature = "asyncdb")]
+            async_stack: database_interface::async_db::FiberStack::default(),
         }
     }
 }
 
-impl<CTX, INSP, I, P> Evm<CTX, INSP, I, P> {
+impl<CTX, INSP, I, P, F> Evm<CTX, INSP, I, P, F> {
     /// Consumed self and returns new Evm type with given Inspector.
-    pub fn with_inspector<OINSP>(self, inspector: OINSP) -> Evm<CTX, OINSP, I, P> {
+    pub fn with_inspector<OINSP>(self, inspector: OINSP) -> Evm<CTX, OINSP, I, P, F> {
         Evm {
-            data: EvmData {
-                ctx: self.data.ctx,
-                inspector,
-            },
+            ctx: self.ctx,
+            inspector,
+
             instruction: self.instruction,
             precompiles: self.precompiles,
+            frame_stack: self.frame_stack,
+            #[cfg(feature = "asyncdb")]
+            async_stack: self.async_stack,
         }
     }
 
     /// Consumes self and returns new Evm type with given Precompiles.
-    pub fn with_precompiles<OP>(self, precompiles: OP) -> Evm<CTX, INSP, I, OP> {
+    pub fn with_precompiles<OP>(self, precompiles: OP) -> Evm<CTX, INSP, I, OP, F> {
         Evm {
-            data: self.data,
+            ctx: self.ctx,
+            inspector: self.inspector,
             instruction: self.instruction,
             precompiles,
+            frame_stack: self.frame_stack,
+            #[cfg(feature = "asyncdb")]
+            async_stack: self.async_stack,
         }
     }
 
     /// Consumes self and returns inner Inspector.
     pub fn into_inspector(self) -> INSP {
-        self.data.inspector
+        self.inspector
     }
 }
 
-impl<CTX, INSP, I, P> Deref for Evm<CTX, INSP, I, P> {
+impl<CTX, INSP, I, P, F> Deref for Evm<CTX, INSP, I, P, F> {
     type Target = CTX;
 
     fn deref(&self) -> &Self::Target {
-        &self.data.ctx
+        &self.ctx
     }
 }
 
-impl<CTX, INSP, I, P> DerefMut for Evm<CTX, INSP, I, P> {
+impl<CTX, INSP, I, P, F> DerefMut for Evm<CTX, INSP, I, P, F> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.data.ctx
+        &mut self.ctx
     }
 }

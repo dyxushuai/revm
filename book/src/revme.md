@@ -1,6 +1,6 @@
-# Revm
+# Revme
 
-Is a binary that allows running statetest and eof validation.
+Revme is a binary that allows running statetest and eof validation.
 
 ```bash, ignore
 $: revme --help
@@ -8,7 +8,6 @@ Usage: revme <COMMAND>
 
 Commands:
   statetest       Execute Ethereum state tests
-  eof-validation  Execute EOF validation tests
   evm             Run arbitrary EVM bytecode
   bytecode        Print the structure of an EVM bytecode
   bench           Run bench from specified list
@@ -20,9 +19,15 @@ Options:
 
 ## Running eth tests
 
-Eth tests are suite of tests from Ethereum Fondation that are used to test EVM implementations.
-Part of these tests are included in revm repository in `tests` folder.
+Eth tests are a suite of tests from the Ethereum Foundation that are used to test EVM implementations.
+Part of these tests are included in the revm repository in the `tests` folder.
 
-Download eth tests `git clone https://github.com/ethereum/tests`. They can be run with `revme` with command:
-`cargo run --release -p revme -- statetest tests/GeneralStateTests/ tests/LegacyTests/Constantinople/GeneralStateTests`
-All statetest that can be run by revme can be found in `GeneralStateTests` folder.
+Test suites for the latest hardforks can be found in [EEST releases](https://github.com/ethereum/execution-spec-tests/releases), and there are additional tests that cover older hardforks in [legacytests](https://github.com/ethereum/legacytests)
+
+Revm can run statetest type of tests with `revme` using the following command:
+`cargo run --release -p revme -- statetest folder_path`
+
+For running EEST tests, we can use the `./scripts/run-tests.sh`. It downloads and runs the develop fixtures by default; set `REVM_STATETEST_STABLE=1` to use stable fixtures instead.
+
+For legacy tests, we need to first download the repo `git clone https://github.com/ethereum/legacytests` and then run it with `cargo run --release -p revme -- statetest legacytests/Cancun/GeneralStateTests`
+All statetest that can be run by revme can be found in the `GeneralStateTests` folder.

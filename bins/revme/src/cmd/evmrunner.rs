@@ -1,15 +1,13 @@
 use clap::Parser;
-use database::BenchmarkDB;
-use inspector::{inspectors::TracerEip3155, InspectEvm};
 use revm::{
     bytecode::{Bytecode, BytecodeDecodeError},
-    primitives::{address, hex, Address, TxKind},
+    context::TxEnv,
+    database::{BenchmarkDB, BENCH_CALLER, BENCH_TARGET},
+    inspector::{inspectors::TracerEip3155, InspectEvm},
+    primitives::{hex, TxKind},
     Context, Database, ExecuteEvm, MainBuilder, MainContext,
 };
-use std::io::Error as IoError;
-use std::path::PathBuf;
-use std::time::Duration;
-use std::{borrow::Cow, fs};
+use std::{borrow::Cow, fs, io::Error as IoError, path::PathBuf, time::Instant};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Errors {
@@ -40,25 +38,32 @@ pub struct Cmd {
     /// Overrides the positional `bytecode` argument.
     #[arg(long)]
     path: Option<PathBuf>,
+
     /// Whether to run in benchmarking mode
     #[arg(long)]
     bench: bool,
+
     /// Hex-encoded input/calldata bytes
     #[arg(long, default_value = "")]
     input: String,
+    /// Gas limit
+    #[arg(long, default_value = "16777216")]
+    gas_limit: u64,
+
     /// Whether to print the state
     #[arg(long)]
     state: bool,
     /// Whether to print the trace
     #[arg(long)]
     trace: bool,
+    /// Output results in JSON format
+    #[arg(long)]
+    json: bool,
 }
 
 impl Cmd {
     /// Runs evm runner command.
     pub fn run(&self) -> Result<(), Errors> {
-        const CALLER: Address = address!("0000000000000000000000000000000000000001");
-
         let bytecode_str: Cow<'_, str> = if let Some(path) = &self.path {
             // Check if path exists.
             if !path.exists() {
@@ -71,50 +76,82 @@ impl Cmd {
             unreachable!()
         };
 
-        let bytecode = hex::decode(bytecode_str.trim()).map_err(|_| Errors::InvalidBytecode)?;
-        let input = hex::decode(self.input.trim())
+        let bytecode = hex::decode(bytecode_str.trim().trim_start_matches("0x"))
+            .map_err(|_| Errors::InvalidBytecode)?;
+        let input = hex::decode(self.input.trim().trim_start_matches("0x"))
             .map_err(|_| Errors::InvalidInput)?
             .into();
 
         let mut db = BenchmarkDB::new_bytecode(Bytecode::new_raw_checked(bytecode.into())?);
 
-        let nonce = db.basic(CALLER).unwrap().map_or(0, |account| account.nonce);
+        let nonce = db
+            .basic(BENCH_CALLER)
+            .unwrap()
+            .map_or(0, |account| account.nonce);
 
         // BenchmarkDB is dummy state that implements Database trait.
         // The bytecode is deployed at zero address.
         let mut evm = Context::mainnet()
             .with_db(db)
-            .modify_tx_chained(|tx| {
-                tx.caller = CALLER;
-                tx.kind = TxKind::Call(Address::ZERO);
-                tx.data = input;
-                tx.nonce = nonce;
-            })
             .build_mainnet_with_inspector(TracerEip3155::new(Box::new(std::io::stdout())));
 
-        if self.bench {
-            // Microbenchmark
-            let bench_options = microbench::Options::default().time(Duration::from_secs(3));
+        let tx = TxEnv::builder()
+            .caller(BENCH_CALLER)
+            .kind(TxKind::Call(BENCH_TARGET))
+            .data(input)
+            .nonce(nonce)
+            .gas_limit(self.gas_limit)
+            .build()
+            .unwrap();
 
-            microbench::bench(&bench_options, "Run bytecode", || {
-                let _ = evm.replay().unwrap();
+        if self.bench {
+            let mut criterion = criterion::Criterion::default()
+                .warm_up_time(std::time::Duration::from_millis(300))
+                .measurement_time(std::time::Duration::from_secs(2))
+                .without_plots();
+            let mut criterion_group = criterion.benchmark_group("revme");
+            criterion_group.bench_function("evm", |b| {
+                b.iter_batched(
+                    || tx.clone(),
+                    |input| evm.transact(input).unwrap(),
+                    criterion::BatchSize::SmallInput,
+                );
             });
+            criterion_group.finish();
 
             return Ok(());
         }
 
-        let out = if self.trace {
-            evm.inspect_replay().map_err(|_| Errors::EVMError)?
+        let time = Instant::now();
+        let r = if self.trace {
+            evm.inspect_tx(tx)
         } else {
-            let out = evm.replay().map_err(|_| Errors::EVMError)?;
-            println!("Result: {:#?}", out.result);
-            out
-        };
-
-        if self.state {
-            println!("State: {:#?}", out.state);
+            evm.transact(tx)
         }
+        .map_err(|_| Errors::EVMError)?;
+        let time = time.elapsed();
 
+        if self.json {
+            let json = if self.state {
+                serde_json::json!({
+                    "result": r.result,
+                    "state": r.state,
+                    "elapsed": time.as_secs_f64(),
+                })
+            } else {
+                serde_json::json!({
+                    "result": r.result,
+                    "elapsed": time.as_secs_f64(),
+                })
+            };
+            println!("{}", serde_json::to_string_pretty(&json).unwrap());
+        } else {
+            println!("Result: {:#?}", r.result);
+            if self.state {
+                println!("State: {:#?}", r.state);
+            }
+            println!("Elapsed: {time:?}");
+        }
         Ok(())
     }
 }

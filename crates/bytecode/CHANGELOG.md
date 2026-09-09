@@ -7,6 +7,260 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [43.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v42.0.0...revm-bytecode-v43.0.0) - 2026-08-20
+
+### Other
+
+- updated the following local packages: revm-primitives
+
+## [41.0.1](https://github.com/bluealloy/revm/compare/revm-bytecode-v41.0.0...revm-bytecode-v41.0.1) - 2026-07-22
+
+### Fixed
+
+- *(bytecode)* preserve iterator position after truncated push ([#3800](https://github.com/bluealloy/revm/pull/3800))
+- *(bytecode)* avoid iterating legacy padding opcodes ([#3792](https://github.com/bluealloy/revm/pull/3792))
+
+### Other
+
+- *(bytecode)* cover InvalidMagic and verify EIP-7702 magic constants ([#3806](https://github.com/bluealloy/revm/pull/3806))
+- *(deps)* bump dependencies ([#3794](https://github.com/bluealloy/revm/pull/3794))
+- *(bytecode)* cover all truncated pushes ([#3783](https://github.com/bluealloy/revm/pull/3783))
+
+## [41.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v11.0.1...revm-bytecode-v41.0.0) - 2026-06-11
+
+### Fixed
+
+- *(bytecode)* avoid out-of-bounds pointer in analyze_legacy ([#3752](https://github.com/bluealloy/revm/pull/3752))
+
+## [11.0.1](https://github.com/bluealloy/revm/compare/revm-bytecode-v11.0.0...revm-bytecode-v11.0.1) - 2026-05-26
+
+### Other
+
+- mark RETURN and REVERT as memory-modifying ([#3703](https://github.com/bluealloy/revm/pull/3703))
+
+## [11.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v10.0.0...revm-bytecode-v11.0.0) - 2026-05-19
+
+### Fixed
+
+- opcode struct panics/safety ([#3566](https://github.com/bluealloy/revm/pull/3566))
+- *(bytecode)* mark `Bytecode::new_analyzed` as unsafe ([#3557](https://github.com/bluealloy/revm/pull/3557))
+
+### Other
+
+- enable and fix clippy::missing_const_for_fn ([#3592](https://github.com/bluealloy/revm/pull/3592))
+- no alloc for empty accounts ([#3590](https://github.com/bluealloy/revm/pull/3590))
+- avoid cloning precompiles on warmup ([#3586](https://github.com/bluealloy/revm/pull/3586))
+- rm op-revm (migrated to ethereum-optimism/optimism) ([#3568](https://github.com/bluealloy/revm/pull/3568))
+
+## [10.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v9.0.0...revm-bytecode-v10.0.0) - 2026-04-10
+
+### Added
+
+- add crate-level re-exports for all revm-* dependencies ([#3507](https://github.com/bluealloy/revm/pull/3507))
+
+### Fixed
+
+- make Bytecode Ord consistent with PartialEq and Hash ([#3479](https://github.com/bluealloy/revm/pull/3479))
+
+## [9.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v8.0.0...revm-bytecode-v9.0.0) - 2026-03-02
+
+### Added
+
+- Implement EIP-7843 SLOTNUM opcode for Amsterdam ([#3340](https://github.com/bluealloy/revm/pull/3340))
+- Implement EIP-8024 for Amsterdam ([#3223](https://github.com/bluealloy/revm/pull/3223))
+
+### Fixed
+
+- add a test utility function to generate memory input opcodes ([#3280](https://github.com/bluealloy/revm/pull/3280))
+- *(bytecode)* add padding for final opcode missing immediates ([#3338](https://github.com/bluealloy/revm/pull/3338))
+- *(bytecode)* improve analyze_legacy and stack tests ([#3335](https://github.com/bluealloy/revm/pull/3335))
+- the LOG[0-4] CREATE CREATE2 opcode can modify memory ([#3328](https://github.com/bluealloy/revm/pull/3328))
+- *(bytecode)* improve analyze_legacy padding for SWAPN/DUPN/EXCHANGE ([#3332](https://github.com/bluealloy/revm/pull/3332))
+
+### Other
+
+- [**breaking**] flatten Bytecode ([#3375](https://github.com/bluealloy/revm/pull/3375))
+- remove GPL mention and update gmp feature comments ([#3383](https://github.com/bluealloy/revm/pull/3383))
+- *(tests)* remove redundant clones in legacy analysis tests ([#3317](https://github.com/bluealloy/revm/pull/3317))
+
+## [8.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v7.1.1...revm-bytecode-v8.0.0) - 2026-01-15
+
+### Added
+
+- BAL EIP-7928 ([#3070](https://github.com/bluealloy/revm/pull/3070))
+
+### Fixed
+
+- *(bytecode)* remove duplicate implementation in bytes_ref method ([#3276](https://github.com/bluealloy/revm/pull/3276))
+- the MLOAD opcode can resize memory ([#3266](https://github.com/bluealloy/revm/pull/3266))
+
+### Other
+
+- fix typos, grammar errors, and improve documentation consistency ([#3294](https://github.com/bluealloy/revm/pull/3294))
+- happy new year, 2026 licence ([#3272](https://github.com/bluealloy/revm/pull/3272))
+- the KECCAK256 opcode can resize memory ([#3269](https://github.com/bluealloy/revm/pull/3269))
+
+## [7.1.1](https://github.com/bluealloy/revm/compare/revm-bytecode-v7.1.0...revm-bytecode-v7.1.1) - 2025-11-07
+
+### Other
+
+- updated the following local packages: revm-primitives
+
+## [7.1.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v7.0.2...revm-bytecode-v7.1.0) - 2025-10-30
+
+### Added
+
+- impl `Sealable` for `Bytecode` ([#3118](https://github.com/bluealloy/revm/pull/3118))
+
+## [7.0.2](https://github.com/bluealloy/revm/compare/revm-bytecode-v7.0.1...revm-bytecode-v7.0.2) - 2025-10-15
+
+### Other
+
+- use JumpTable old serde format ([#3101](https://github.com/bluealloy/revm/pull/3101))
+
+## [7.0.1](https://github.com/bluealloy/revm/compare/revm-bytecode-v7.0.0...revm-bytecode-v7.0.1) - 2025-10-15
+
+### Fixed
+
+- support legacy JumpTable serde format ([#3098](https://github.com/bluealloy/revm/pull/3098))
+
+## [7.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v6.2.2...revm-bytecode-v7.0.0) - 2025-10-07
+
+### Added
+
+- in JumpTable use Bytes instead of BitVec ([#3014](https://github.com/bluealloy/revm/pull/3014))
+
+### Fixed
+
+- *(bytecode)* exclude MLOAD from modifies_memory and update test ([#3004](https://github.com/bluealloy/revm/pull/3004))
+- Apply spelling corrections from PRs #2926, #2915, #2908 ([#2978](https://github.com/bluealloy/revm/pull/2978))
+
+### Other
+
+- add boundless ([#3043](https://github.com/bluealloy/revm/pull/3043))
+- use offset_from_unsigned ([#2999](https://github.com/bluealloy/revm/pull/2999))
+- add SECURITY.md ([#2956](https://github.com/bluealloy/revm/pull/2956))
+
+## [6.2.2](https://github.com/bluealloy/revm/compare/revm-bytecode-v6.2.1...revm-bytecode-v6.2.2) - 2025-08-23
+
+### Other
+
+- use core::fmt and remove unused Debug import ([#2887](https://github.com/bluealloy/revm/pull/2887))
+
+## [6.2.1](https://github.com/bluealloy/revm/compare/revm-bytecode-v6.2.0...revm-bytecode-v6.2.1) - 2025-08-12
+
+### Other
+
+- Revert "feat: removed padding in case last opcode is terminal ([#2816](https://github.com/bluealloy/revm/pull/2816))" ([#2883](https://github.com/bluealloy/revm/pull/2883))
+- *(bytecode)* remove unused Debug import ([#2879](https://github.com/bluealloy/revm/pull/2879))
+- update outdated opcode memory reference link ([#2859](https://github.com/bluealloy/revm/pull/2859))
+
+## [6.2.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v6.1.0...revm-bytecode-v6.2.0) - 2025-08-06
+
+### Added
+
+- removed padding in case last opcode is terminating or unknown ([#2816](https://github.com/bluealloy/revm/pull/2816))
+
+### Fixed
+
+- correct various typos in documentation and comments ([#2855](https://github.com/bluealloy/revm/pull/2855))
+
+### Other
+
+- *(OpCode)* add is_valid ([#2847](https://github.com/bluealloy/revm/pull/2847))
+- update README.md ([#2842](https://github.com/bluealloy/revm/pull/2842))
+- *(benches)* clean up criterion callsites ([#2833](https://github.com/bluealloy/revm/pull/2833))
+- improve ExtBytecode hash handling ([#2826](https://github.com/bluealloy/revm/pull/2826))
+- add rust-version and note about MSRV ([#2789](https://github.com/bluealloy/revm/pull/2789))
+- add OnceLock re-export with no_std support ([#2787](https://github.com/bluealloy/revm/pull/2787))
+
+## [6.1.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v6.0.1...revm-bytecode-v6.1.0) - 2025-07-23
+
+### Added
+
+- *(bytecode)* add version getter + make versoin dynamic ([#2751](https://github.com/bluealloy/revm/pull/2751))
+
+### Fixed
+
+- fully deprecate serde-json ([#2767](https://github.com/bluealloy/revm/pull/2767))
+
+### Other
+
+- clean up jump map ([#2764](https://github.com/bluealloy/revm/pull/2764))
+- clean up bytecode analysis ([#2763](https://github.com/bluealloy/revm/pull/2763))
+- Fix typo in EIP-7702 bytecode format comment (magic byte) ([#2733](https://github.com/bluealloy/revm/pull/2733))
+
+## [6.0.1](https://github.com/bluealloy/revm/compare/revm-bytecode-v6.0.0...revm-bytecode-v6.0.1) - 2025-07-03
+
+### Other
+
+- add PartialEq u8 ([#2688](https://github.com/bluealloy/revm/pull/2688))
+
+## [6.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v5.0.0...revm-bytecode-v6.0.0) - 2025-06-30
+
+### Fixed
+
+- implement `PartialEq` for `JumpTable` correctly ([#2654](https://github.com/bluealloy/revm/pull/2654))
+
+### Other
+
+- cargo clippy --fix --all ([#2671](https://github.com/bluealloy/revm/pull/2671))
+
+## [5.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v4.1.0...revm-bytecode-v5.0.0) - 2025-06-19
+
+### Added
+
+- remove EOF ([#2644](https://github.com/bluealloy/revm/pull/2644))
+- configurable contract size limit ([#2611](https://github.com/bluealloy/revm/pull/2611)) ([#2642](https://github.com/bluealloy/revm/pull/2642))
+- *(precompile)* rug/gmp-based modexp ([#2596](https://github.com/bluealloy/revm/pull/2596))
+- add clz opcode ([#2598](https://github.com/bluealloy/revm/pull/2598))
+
+### Other
+
+- *(tests)* extend test for is_valid jumptable ([#2622](https://github.com/bluealloy/revm/pull/2622))
+- faster JumpTable bits lookup ([#2618](https://github.com/bluealloy/revm/pull/2618))
+
+## [4.1.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v4.0.1...revm-bytecode-v4.1.0) - 2025-06-06
+
+### Added
+
+- transact multi tx ([#2517](https://github.com/bluealloy/revm/pull/2517))
+
+## [4.0.1](https://github.com/bluealloy/revm/compare/revm-bytecode-v4.0.0...revm-bytecode-v4.0.1) - 2025-05-22
+
+### Other
+
+- make crates.io version badge clickable ([#2526](https://github.com/bluealloy/revm/pull/2526))
+
+## [4.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v3.0.0...revm-bytecode-v4.0.0) - 2025-05-07
+
+### Added
+
+- *(EOF)* Changes needed for devnet-1 ([#2377](https://github.com/bluealloy/revm/pull/2377))
+- *(bytecode)* improve legacy bytecode padding ([#2423](https://github.com/bluealloy/revm/pull/2423))
+
+### Other
+
+- typos ([#2474](https://github.com/bluealloy/revm/pull/2474))
+- copy edit The Book ([#2463](https://github.com/bluealloy/revm/pull/2463))
+- simplify opcode iter ([#2458](https://github.com/bluealloy/revm/pull/2458))
+- make OPCODE_INFO a static ([#2459](https://github.com/bluealloy/revm/pull/2459))
+- simplify reading signed integers ([#2456](https://github.com/bluealloy/revm/pull/2456))
+- cache and use JumpTable::default ([#2439](https://github.com/bluealloy/revm/pull/2439))
+- bump dependency version ([#2431](https://github.com/bluealloy/revm/pull/2431))
+- fixed broken link ([#2421](https://github.com/bluealloy/revm/pull/2421))
+- *(lints)* revm-context lints ([#2404](https://github.com/bluealloy/revm/pull/2404))
+
+## [3.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v2.0.0...revm-bytecode-v3.0.0) - 2025-04-09
+
+### Added
+
+- Iteration of bytecode opcodes ([#2349](https://github.com/bluealloy/revm/pull/2349))
+
+### Other
+
+- add 0x prefix to b256! and address! calls ([#2345](https://github.com/bluealloy/revm/pull/2345))
+
 ## [2.0.0](https://github.com/bluealloy/revm/compare/revm-bytecode-v1.0.0...revm-bytecode-v2.0.0) - 2025-03-28
 
 ### Fixed

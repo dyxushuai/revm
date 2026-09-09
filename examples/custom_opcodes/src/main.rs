@@ -10,8 +10,9 @@ use revm::{
     interpreter::{
         interpreter::EthInterpreter,
         interpreter_types::{Immediates, Jumps},
-        Interpreter,
+        Instruction, InstructionContext,
     },
+    primitives::hardfork::SpecId,
     primitives::TxKind,
     state::Bytecode,
     Context, InspectEvm, MainContext,
@@ -20,6 +21,9 @@ use revm::{
 /// Opcode hex value
 const MY_STATIC_JUMP: u8 = 0x0C;
 
+/// Demonstrates how to implement and use custom opcodes in REVM.
+/// This example shows how to create a custom static jump opcode that reads
+/// a 16-bit offset from the bytecode and performs a relative jump.
 pub fn main() {
     let ctx = Context::mainnet().with_db(BenchmarkDB::new_bytecode(Bytecode::new_raw(
         [
@@ -34,25 +38,29 @@ pub fn main() {
     )));
 
     // Create a new instruction set with our mainnet opcodes.
-    let mut instructions = EthInstructions::new_mainnet();
+    let mut instructions = EthInstructions::new_mainnet_with_spec(SpecId::default());
     // insert our custom opcode
     instructions.insert_instruction(
         MY_STATIC_JUMP,
-        |interpreter: &mut Interpreter<EthInterpreter>, _| {
-            let offset = interpreter.bytecode.read_i16();
-            interpreter.bytecode.relative_jump(offset as isize);
-        },
+        Instruction::new(|ctx: InstructionContext<'_, _, EthInterpreter>| {
+            let offset = ctx.interpreter.bytecode.read_i16();
+            ctx.interpreter.bytecode.relative_jump(offset as isize);
+            Ok(())
+        }),
+        0,
     );
 
     // Create a new EVM instance.
-    let mut evm = Evm::new(ctx, instructions, EthPrecompiles::default())
+    let mut evm = Evm::new(ctx, instructions, EthPrecompiles::new(SpecId::default()))
         .with_inspector(TracerEip3155::new_stdout().without_summary());
 
     // inspect the transaction.
-    let _ = evm.inspect_with_tx(TxEnv {
-        kind: TxKind::Call(BENCH_TARGET),
-        ..Default::default()
-    });
+    let _ = evm.inspect_one_tx(
+        TxEnv::builder()
+            .kind(TxKind::Call(BENCH_TARGET))
+            .build()
+            .unwrap(),
+    );
 
     // Expected output where we can see that JUMPDEST is called.
     /*
